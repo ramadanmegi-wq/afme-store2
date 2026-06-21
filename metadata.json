@@ -1,0 +1,8 @@
+{
+  "name": "AFME Store",
+  "description": "Sistem POS Sederhana Dan Stabil untuk Toko HP iPhone Second, Aksesoris, Service, dan Tukar Tambah.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

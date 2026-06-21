@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@media print {
+  /* Hide all external layouts, widgets, buttons, sidebars when printing */
+  html, body, #root, #root *, .no-print {
+    visibility: hidden !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Expose ONLY the specific paper receipt node */
+  #print-receipt-area,
+  #print-receipt-area * {
+    visibility: visible !important;
+  }
+
+  /* Expose financial statement report if printing that instead */
+  #financial-statement-print-area,
+  #financial-statement-print-area * {
+    visibility: visible !important;
+  }
+
+  /* Style actual print area paper to standard thermal 80mm roll format */
+  #print-receipt-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 !important;
+    padding: 0px 5px !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    font-size: 11px !important;
+    font-family: 'JetBrains Mono', Courier, monospace !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Style financial report to slide neatly into physical documents */
+  #financial-statement-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
+}
