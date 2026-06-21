@@ -129,42 +129,91 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Load and refresh state values asychronously from Supabase or localStorage fallback
+  // Centralized wrapper to safely execute database actions with detailed error handling for fetch/network issues
+  const safeRequest = async <T,>(
+    requestFn: () => Promise<T>,
+    fallbackFn: () => T | Promise<T>,
+    successMessage?: string,
+    errorMessagePrefix?: string
+  ): Promise<T> => {
+    try {
+      const result = await requestFn();
+      if (successMessage) {
+        triggerToast(successMessage, 'success');
+      }
+      return result;
+    } catch (err: any) {
+      console.error("database transaction error:", err);
+      const errStr = String(err?.message || err).toLowerCase();
+      const isFetchFailed = 
+        errStr.includes('failed to fetch') || 
+        errStr.includes('network error') || 
+        errStr.includes('load failed') ||
+        errStr.includes('networkerror') ||
+        errStr.includes('cors') ||
+        (err?.name && err.name.includes('Type')) && errStr.includes('fetch');
+
+      if (isFetchFailed) {
+        triggerToast(
+          'Gagal Terhubung: Server Supabase tidak dapat dijangkau (Failed to Fetch). Harap periksa koneksi internet Anda atau pastikan variabel VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY di lingkungan hosting atau Vercel sudah sesuai.',
+          'error'
+        );
+      } else {
+        const errMsg = err?.message || String(err);
+        triggerToast(
+          `${errorMessagePrefix || 'Terjadi kesalahan sistem'}: ${errMsg}`,
+          'error'
+        );
+      }
+      return await fallbackFn();
+    }
+  };
+
+  // Load and refresh state values asynchronously from Supabase or localStorage fallback
   const refreshDbState = async () => {
     setIsLoading(true);
-    try {
-      if (isSupabaseConfigured) {
-        // Multi-fetching from cloud
-        const [dbProducts, dbServices, dbTransactions, dbExpenses, dbSpareparts] = await Promise.all([
-          getProductsFromSupabase(),
-          getServicesFromSupabase(),
-          getTransactionsFromSupabase(),
-          getExpensesFromSupabase(),
-          getSparepartsFromSupabase()
-        ]);
-        
-        setProducts(dbProducts);
-        setServices(dbServices);
-        setTransactions(dbTransactions);
-        setExpenses(dbExpenses);
-        setSpareparts(dbSpareparts);
-        setCustomers(getCustomers()); // Customers fallback
-        setIsLoading(false);
-        return;
-      }
-    } catch (e) {
-      console.error('Gagal memuat data dari Supabase cloud:', e);
-      triggerToast('Gagal memuat database cloud, beralih ke offline cached local storage', 'error');
+    if (isSupabaseConfigured) {
+      const data = await safeRequest(
+        async () => {
+          const [dbProducts, dbServices, dbTransactions, dbExpenses, dbSpareparts] = await Promise.all([
+            getProductsFromSupabase(),
+            getServicesFromSupabase(),
+            getTransactionsFromSupabase(),
+            getExpensesFromSupabase(),
+            getSparepartsFromSupabase()
+          ]);
+          return { dbProducts, dbServices, dbTransactions, dbExpenses, dbSpareparts };
+        },
+        () => {
+          return {
+            dbProducts: getProducts(),
+            dbServices: getServices(),
+            dbTransactions: getTransactions(),
+            dbExpenses: getExpenses(),
+            dbSpareparts: getSpareparts()
+          };
+        },
+        undefined,
+        'Gagal memuat data dari Supabase cloud'
+      );
+      
+      setProducts(data.dbProducts);
+      setServices(data.dbServices);
+      setTransactions(data.dbTransactions);
+      setExpenses(data.dbExpenses);
+      setSpareparts(data.dbSpareparts);
+      setCustomers(getCustomers()); // Customers fallback
+      setIsLoading(false);
+    } else {
+      // Default Fallback Local Storage
+      setProducts(getProducts());
+      setServices(getServices());
+      setTransactions(getTransactions());
+      setCustomers(getCustomers());
+      setExpenses(getExpenses());
+      setSpareparts(getSpareparts());
+      setIsLoading(false);
     }
-
-    // Default Fallback Local Storage
-    setProducts(getProducts());
-    setServices(getServices());
-    setTransactions(getTransactions());
-    setCustomers(getCustomers());
-    setExpenses(getExpenses());
-    setSpareparts(getSpareparts());
-    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -175,8 +224,15 @@ export default function App() {
   const handleSaveProduct = async (prod: Product) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await saveProductToSupabase(prod);
-      triggerToast('Berhasil mengunggah perubahan produk ke database Supabase');
+      await safeRequest(
+        () => saveProductToSupabase(prod),
+        () => {
+          saveProduct(prod);
+          triggerToast('Gagal sinkron cloud, perubahan disimpan ke penyimpanan lokal sementara', 'info');
+        },
+        'Berhasil mengunggah perubahan produk ke database Supabase',
+        'Gagal menyimpan produk ke Cloud'
+      );
     } else {
       saveProduct(prod);
       triggerToast('Penyimpanan lokal sukses (Offline Cache)');
@@ -191,8 +247,15 @@ export default function App() {
     
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await deleteProductFromSupabase(id, prod.type);
-      triggerToast('Produk terhapus dari Supabase Cloud', 'info');
+      await safeRequest(
+        () => deleteProductFromSupabase(id, prod.type),
+        () => {
+          deleteProduct(id);
+          triggerToast('Gagal sinkron cloud, produk dihapus dari penyimpanan lokal', 'info');
+        },
+        'Produk terhapus dari Supabase Cloud',
+        'Gagal menghapus produk dari Cloud'
+      );
     } else {
       deleteProduct(id);
       triggerToast('Produk terhapus (Offline Cache)', 'info');
@@ -204,8 +267,15 @@ export default function App() {
   const handleSaveService = async (srv: Service) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await saveServiceToSupabase(srv);
-      triggerToast('Berhasil menyimpan nota reparasi di Supabase Cloud');
+      await safeRequest(
+        () => saveServiceToSupabase(srv),
+        () => {
+          saveService(srv);
+          triggerToast('Gagal sinkron cloud, hasil servis disimpan secara lokal', 'info');
+        },
+        'Berhasil menyimpan nota reparasi di Supabase Cloud',
+        'Gagal menyimpan nota servis ke Cloud'
+      );
     } else {
       saveService(srv);
       triggerToast('Selesai merekam nota servis (Offline Cache)');
@@ -233,8 +303,15 @@ export default function App() {
   const handleDeleteService = async (id: string) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await deleteServiceFromSupabase(id);
-      triggerToast('Model service terhapus dari cloud', 'info');
+      await safeRequest(
+        () => deleteServiceFromSupabase(id),
+        () => {
+          deleteService(id);
+          triggerToast('Gagal sinkron cloud, log servis dihapus secara lokal', 'info');
+        },
+        'Model service terhapus dari cloud',
+        'Gagal menghapus nota servis dari Cloud'
+      );
     } else {
       deleteService(id);
       triggerToast('Service log terhapus (Lokal)', 'info');
@@ -246,8 +323,15 @@ export default function App() {
   const handleSaveSparepart = async (sp: Sparepart) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await saveSparepartToSupabase(sp);
-      triggerToast('Katalog sparepart diunggah ke cloud database');
+      await safeRequest(
+        () => saveSparepartToSupabase(sp),
+        () => {
+          saveSparepart(sp);
+          triggerToast('Gagal sinkron cloud, sparepart disimpan secara lokal', 'info');
+        },
+        'Katalog sparepart diunggah ke cloud database',
+        'Gagal menyimpan sparepart ke Cloud'
+      );
     } else {
       saveSparepart(sp);
       triggerToast('Sparepart telah diperbarui secara lokal');
@@ -259,8 +343,15 @@ export default function App() {
   const handleDeleteSparepart = async (id: string) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await deleteSparepartFromSupabase(id);
-      triggerToast('Katalog sparepart terhapus dari cloud', 'info');
+      await safeRequest(
+        () => deleteSparepartFromSupabase(id),
+        () => {
+          deleteSparepart(id);
+          triggerToast('Gagal sinkron cloud, sparepart dihapus secara lokal', 'info');
+        },
+        'Katalog sparepart terhapus dari cloud',
+        'Gagal menghapus sparepart dari Cloud'
+      );
     } else {
       deleteSparepart(id);
       triggerToast('Sparepart terhapus (Lokal)', 'info');
@@ -272,8 +363,15 @@ export default function App() {
   const handleCheckoutTransaction = async (trx: Transaction) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await saveTransactionToSupabase(trx);
-      triggerToast('Transaksi POS Kasir diproses permanen di Supabase');
+      await safeRequest(
+        () => saveTransactionToSupabase(trx),
+        () => {
+          saveTransaction(trx);
+          triggerToast('Gagal sinkron cloud, transaksi dicatat ke penyimpanan lokal', 'info');
+        },
+        'Transaksi POS Kasir diproses permanen di Supabase',
+        'Gagal memproses transaksi ke Cloud'
+      );
     } else {
       saveTransaction(trx);
       triggerToast('Transaksi tercatat (Offline Local Storage)');
@@ -300,21 +398,21 @@ export default function App() {
   // Update/Edit existing transaction
   const handleUpdateTransaction = async (updatedTrx: Transaction) => {
     setIsLoading(true);
-    try {
-      if (isSupabaseConfigured) {
-        await updateTransactionInSupabase(updatedTrx);
-        triggerToast('Transaksi berhasil diperbarui di cloud Supabase', 'success');
-      } else {
-        updateTransaction(updatedTrx);
-        triggerToast('Transaksi berhasil diperbarui (Offline)', 'success');
-      }
-      await refreshDbState();
-    } catch (err: any) {
-      console.error(err);
-      triggerToast('Gagal memperbarui transaksi: ' + (err.message || err), 'error');
-    } finally {
-      setIsLoading(false);
+    if (isSupabaseConfigured) {
+      await safeRequest(
+        () => updateTransactionInSupabase(updatedTrx),
+        () => {
+          updateTransaction(updatedTrx);
+          triggerToast('Gagal sinkron cloud, transaksi diperbarui secara lokal', 'info');
+        },
+        'Transaksi berhasil diperbarui di cloud Supabase',
+        'Gagal memperbarui transaksi di Cloud'
+      );
+    } else {
+      updateTransaction(updatedTrx);
+      triggerToast('Transaksi berhasil diperbarui (Offline)', 'success');
     }
+    await refreshDbState();
   };
 
   // Add/Update customer
@@ -355,8 +453,15 @@ export default function App() {
       id: `exp-${Date.now()}`
     };
     if (isSupabaseConfigured) {
-      await saveExpenseToSupabase(newExp);
-      triggerToast('Pengeluaran berhasil dicatat di cloud');
+      await safeRequest(
+        () => saveExpenseToSupabase(newExp),
+        () => {
+          saveExpense(newExp);
+          triggerToast('Gagal sinkron cloud, pengeluaran dicatat secara lokal', 'info');
+        },
+        'Pengeluaran berhasil dicatat di cloud',
+        'Gagal mencatat pengeluaran di Cloud'
+      );
     } else {
       saveExpense(newExp);
       triggerToast('Biaya operasional tersimpan (Offline)');
@@ -368,8 +473,15 @@ export default function App() {
   const handleDeleteExpense = async (id: string) => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await deleteExpenseFromSupabase(id);
-      triggerToast('Jurnal biaya dibatalkan dari Supabase', 'info');
+      await safeRequest(
+        () => deleteExpenseFromSupabase(id),
+        () => {
+          deleteExpense(id);
+          triggerToast('Gagal sinkron cloud, pengeluaran dihapus secara lokal', 'info');
+        },
+        'Jurnal biaya dibatalkan dari Supabase',
+        'Gagal menghapus pengeluaran dari Cloud'
+      );
     } else {
       deleteExpense(id);
       triggerToast('Jurnal biaya terhapus (Lokal)', 'info');
@@ -392,20 +504,27 @@ export default function App() {
     const localExpenses = getExpenses();
     const localSpareparts = getSpareparts();
 
-    const res = await migrateLocalDataToSupabase(
-      localProds,
-      localServices,
-      localTransactions,
-      localExpenses,
-      localSpareparts
+    const result = await safeRequest(
+      () => migrateLocalDataToSupabase(
+        localProds,
+        localServices,
+        localTransactions,
+        localExpenses,
+        localSpareparts
+      ),
+      () => {
+        return { success: false, count: 0, error: 'Koneksi gagal atau data tidak valid.' };
+      },
+      undefined,
+      'Gagal melakukan sinkronisasi migrasi'
     );
 
-    if (res.success) {
-      triggerToast(`Fabulous! Berhasil memigrasikan ${res.count} baris data ke database cloud Supabase!`, 'success');
+    if (result.success) {
+      triggerToast(`Fabulous! Berhasil memigrasikan ${result.count} baris data ke database cloud Supabase!`, 'success');
       // Matikan inisialisasi lokal agar beralih penuh ke cloud
       localStorage.setItem('afme_initialized', 'true');
     } else {
-      triggerToast(`Migrasi terganggu: ${res.error}`, 'error');
+      triggerToast(`Migrasi terganggu: ${result.error}`, 'error');
     }
     await refreshDbState();
   };
@@ -414,9 +533,15 @@ export default function App() {
   const handleResetDatabase = async () => {
     setIsLoading(true);
     if (isSupabaseConfigured) {
-      await clearAllSupabaseData();
-      clearAllData();
-      triggerToast('Seluruh tabel di cloud Supabase & Local Cache (termasuk daftar pelanggan) berhasil dikosongkan!', 'info');
+      await safeRequest(
+        () => clearAllSupabaseData(),
+        () => {
+          clearAllData();
+          triggerToast('Gagal sinkron cloud, database lokal telah dikosongkan', 'info');
+        },
+        'Seluruh tabel di cloud Supabase & Local Cache (termasuk daftar pelanggan) berhasil dikosongkan!',
+        'Gagal membersihkan database di Cloud'
+      );
     } else {
       clearAllData();
       triggerToast('Local Storage telah disapu bersih!', 'info');
