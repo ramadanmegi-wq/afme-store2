@@ -328,6 +328,7 @@ export default function App() {
         () => {
           saveSparepart(sp);
           triggerToast('Gagal sinkron cloud, sparepart disimpan secara lokal', 'info');
+          return undefined;
         },
         'Katalog sparepart diunggah ke cloud database',
         'Gagal menyimpan sparepart ke Cloud'

@@ -111,9 +111,18 @@ export default function ServiceHP({
 
   // Switch status quickly
   const handleQuickStatusChange = (service: Service, nextStatus: 'pending' | 'proses' | 'selesai') => {
+    let finalCapitalCost = service.capitalCost || 0;
+    if (nextStatus === 'selesai' && service.sparepartId && (!finalCapitalCost || finalCapitalCost === 0)) {
+      const selectedSp = spareparts.find(sp => sp.id === service.sparepartId);
+      if (selectedSp) {
+        finalCapitalCost = selectedSp.buyPrice;
+      }
+    }
+
     const updatedSrv: Service = {
       ...service,
-      status: nextStatus
+      status: nextStatus,
+      capitalCost: finalCapitalCost
     };
     onSaveService(updatedSrv);
   };
@@ -125,6 +134,25 @@ export default function ServiceHP({
 
     const selectedSp = spareparts.find(sp => sp.id === sparepartId);
 
+    let finalCapitalCost = 0;
+    if (activeRole === 'admin' || activeRole === 'owner') {
+      finalCapitalCost = Number(capitalCost);
+      // Auto-populate with sparepart buyPrice if it was left at 0 but a sparepart was chosen
+      if (selectedSp && (!finalCapitalCost || finalCapitalCost === 0)) {
+        finalCapitalCost = selectedSp.buyPrice;
+      }
+    } else {
+      // For karyawan, use the sparepart's buyPrice if a sparepart is selected, 
+      // otherwise use the existing capitalCost (if editing) or 0
+      if (selectedSp) {
+        finalCapitalCost = selectedSp.buyPrice;
+      } else if (editingId) {
+        finalCapitalCost = services.find(s => s.id === editingId)?.capitalCost || 0;
+      } else {
+        finalCapitalCost = 0;
+      }
+    }
+
     const newService: Service = {
       id: editingId || `srv-${Date.now()}`,
       customerName: customerName.trim(),
@@ -134,7 +162,7 @@ export default function ServiceHP({
       description: description.trim(),
       status,
       cost: Number(cost),
-      capitalCost: (activeRole === 'admin' || activeRole === 'owner') ? Number(capitalCost) : (editingId ? services.find(s => s.id === editingId)?.capitalCost || 0 : 0),
+      capitalCost: finalCapitalCost,
       date: editingId ? services.find(s => s.id === editingId)?.date || new Date().toISOString() : new Date().toISOString(),
       sparepartId: sparepartId || undefined,
       sparepartName: selectedSp ? selectedSp.name : undefined
@@ -264,13 +292,26 @@ export default function ServiceHP({
               <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">Merek Suku Cadang (Dipotong Otomatis)</label>
               <select
                 value={sparepartId}
-                onChange={(e) => setSparepartId(e.target.value)}
+                onChange={(e) => {
+                  const spId = e.target.value;
+                  setSparepartId(spId);
+                  const selectedSp = spareparts.find(sp => sp.id === spId);
+                  if (selectedSp) {
+                    setCapitalCost(selectedSp.buyPrice);
+                    // auto fill cost to sparepart sellingPrice if current cost is 0 or less
+                    if (!cost || cost === 0) {
+                      setCost(selectedSp.sellingPrice);
+                    }
+                  } else {
+                    setCapitalCost(0);
+                  }
+                }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
               >
                 <option value="">-- Jasa Murni (Tanpa Ganti Sparepart) --</option>
                 {spareparts.map((sp) => (
                   <option key={sp.id} value={sp.id} disabled={(sp.stock || 0) <= 0}>
-                    {sp.name} (Ready: {sp.stock} Pcs)
+                    {sp.name} (Ready: {sp.stock} Pcs - Jual: {formatIDR(sp.sellingPrice)})
                   </option>
                 ))}
               </select>

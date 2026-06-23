@@ -599,13 +599,20 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
 export async function deleteProductFromSupabase(id: string, type: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
+    }
     if (type === 'iphone') {
-      await supabase.from('products').delete().eq('id', id);
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
     } else {
-      await supabase.from('accessories').delete().eq('id', id);
+      const { error } = await supabase.from('accessories').delete().eq('id', id);
+      if (error) throw error;
     }
   } catch (e) {
     console.error('Gagal menghapus product dari Supabase:', e);
+    throw e;
   }
 }
 
@@ -640,8 +647,8 @@ export async function getSparepartsFromSupabase(): Promise<Sparepart[]> {
   }
 }
 
-export async function saveSparepartToSupabase(sp: Sparepart): Promise<void> {
-  if (!isSupabaseConfigured) return;
+export async function saveSparepartToSupabase(sp: Sparepart): Promise<string | undefined> {
+  if (!isSupabaseConfigured) return undefined;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sp.id);
     const payload = {
@@ -654,20 +661,30 @@ export async function saveSparepartToSupabase(sp: Sparepart): Promise<void> {
 
     if (isUuid) {
       await supabase.from('spareparts').update(payload).eq('id', sp.id);
+      return sp.id;
     } else {
-      await supabase.from('spareparts').insert([payload]);
+      const { data, error } = await supabase.from('spareparts').insert([payload]).select('id').maybeSingle();
+      if (error) throw error;
+      return data?.id;
     }
   } catch (e) {
     console.error('Gagal menyimpan sparepart ke Supabase:', e);
+    return undefined;
   }
 }
 
 export async function deleteSparepartFromSupabase(id: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
-    await supabase.from('spareparts').delete().eq('id', id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
+    }
+    const { error } = await supabase.from('spareparts').delete().eq('id', id);
+    if (error) throw error;
   } catch (e) {
     console.error('Gagal menghapus sparepart dari Supabase:', e);
+    throw e;
   }
 }
 
@@ -707,14 +724,24 @@ export async function saveServiceToSupabase(srv: Service): Promise<void> {
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(srv.id);
     
-    // Kurangi stok sparepart di Supabase bila status diubah ke 'selesai'
+    // Kurangi stok sparepart di Supabase bila status dirubah ke 'selesai' dan belum selesai sebelumnya
     if (srv.status === 'selesai' && srv.sparepartId) {
-      const isPartUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(srv.sparepartId);
-      if (isPartUuid) {
-        // Ambil stok sekarang
-        const { data: pData } = await supabase.from('spareparts').select('stok').eq('id', srv.sparepartId).maybeSingle();
-        if (pData && pData.stok > 0) {
-          await supabase.from('spareparts').update({ stok: pData.stok - 1 }).eq('id', srv.sparepartId);
+      let shouldDeduct = true;
+      if (isUuid) {
+        const { data: existingSrv } = await supabase.from('services').select('status, sparepart_id').eq('id', srv.id).maybeSingle();
+        if (existingSrv && existingSrv.status === 'selesai' && existingSrv.sparepart_id === srv.sparepartId) {
+          shouldDeduct = false;
+        }
+      }
+
+      if (shouldDeduct) {
+        const isPartUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(srv.sparepartId);
+        if (isPartUuid) {
+          // Ambil stok sekarang
+          const { data: pData } = await supabase.from('spareparts').select('stok').eq('id', srv.sparepartId).maybeSingle();
+          if (pData && pData.stok > 0) {
+            await supabase.from('spareparts').update({ stok: pData.stok - 1 }).eq('id', srv.sparepartId);
+          }
         }
       }
     }
@@ -745,9 +772,15 @@ export async function saveServiceToSupabase(srv: Service): Promise<void> {
 export async function deleteServiceFromSupabase(id: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
-    await supabase.from('services').delete().eq('id', id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
+    }
+    const { error } = await supabase.from('services').delete().eq('id', id);
+    if (error) throw error;
   } catch (e) {
     console.error('Gagal menghapus service dari Supabase:', e);
+    throw e;
   }
 }
 
@@ -1063,9 +1096,15 @@ export async function saveExpenseToSupabase(exp: OperationalExpense): Promise<vo
 export async function deleteExpenseFromSupabase(id: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
-    await supabase.from('expenses').delete().eq('id', id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
+    }
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) throw error;
   } catch (e) {
     console.error('Gagal menghapus expense dari Supabase:', e);
+    throw e;
   }
 }
 
@@ -1081,6 +1120,7 @@ export async function migrateLocalDataToSupabase(
   
   try {
     let count = 0;
+    const sparepartIdMap = new Map<string, string>();
 
     // 1. Migrasi Products (HP & Aksesoris)
     for (const p of prods) {
@@ -1095,13 +1135,20 @@ export async function migrateLocalDataToSupabase(
 
     // 2. Migrasi Spareparts
     for (const sp of parts) {
-      await saveSparepartToSupabase(sp);
+      const newId = await saveSparepartToSupabase(sp);
+      if (newId && sp.id !== newId) {
+        sparepartIdMap.set(sp.id, newId);
+      }
       count++;
     }
 
     // 3. Migrasi Services
     for (const s of srvs) {
-      await saveServiceToSupabase(s);
+      const updatedS = { ...s };
+      if (updatedS.sparepartId && sparepartIdMap.has(updatedS.sparepartId)) {
+        updatedS.sparepartId = sparepartIdMap.get(updatedS.sparepartId);
+      }
+      await saveServiceToSupabase(updatedS);
       count++;
     }
 
