@@ -916,20 +916,21 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
                 <div key={item.productId} className="flex gap-3 justify-between items-start py-2 border-b border-slate-100">
                   <div className="space-y-1.5 flex-1">
                     <p className="font-bold text-slate-850 text-xs leading-tight">{item.model}</p>
-                    {isIphone ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500">Harga Nego:</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-slate-500 font-sans">{isIphone ? 'Harga Nego:' : 'Harga Jual:'}</span>
                         <input
                           type="number"
                           value={item.sellingPrice}
                           onChange={(e) => updatePrice(item.productId, Number(e.target.value))}
                           className="w-24 px-1.5 py-0.5 border border-slate-200 rounded bg-slate-50 text-slate-800 text-[10.5px] font-bold font-mono focus:border-indigo-500 outline-none"
-                          title="Sesuaikan harga jual khusus tukar tambah disini"
+                          title="Sesuaikan harga jual khusus disini"
                         />
                       </div>
-                    ) : (
-                      <p className="text-[11px] font-bold text-slate-600 font-mono">{formatIDR(item.sellingPrice)}</p>
-                    )}
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {formatIDR(item.sellingPrice)} {!isIphone && item.quantity > 1 && `(Total: ${formatIDR(item.sellingPrice * item.quantity)})`}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex flex-col items-end justify-between self-stretch gap-2">
