@@ -86,49 +86,172 @@ export default function Dashboard({
       .slice(0, 4);
   }, [transactions]);
 
-  // Tren volume & performa penjualan selama 7 hari terakhir
-  const last7DaysData = React.useMemo(() => {
+  const [trendFilter, setTrendFilter] = React.useState<'harian' | 'mingguan' | 'bulanan' | 'tigaBulanan' | 'tahunan'>('harian');
+
+  // Tren volume & performa penjualan berdasarkan filter yang dipilih
+  const trendData = React.useMemo(() => {
     const list = [];
     const today = new Date();
     
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(today.getDate() - i);
-      
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`; // Format YYYY-MM-DD
-      
-      const formatter = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' });
-      const label = formatter.format(d);
-      
-      // Filter transaksi pada tanggal ini
-      const dayTransactions = transactions.filter(t => {
-        if (!t.date) return false;
-        const itemDateStr = t.date.split('T')[0];
-        return itemDateStr === dateStr;
-      });
-      
-      const volume = dayTransactions.length;
-      const revenue = dayTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-      const profit = dayTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
-      
-      list.push({
-        dateStr,
-        label,
-        volume,
-        revenue,
-        profit,
-      });
+    if (trendFilter === 'harian') {
+      // 7 Hari Terakhir
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`; // Format YYYY-MM-DD
+        
+        const formatter = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' });
+        const label = formatter.format(d);
+        
+        // Filter transaksi pada tanggal ini
+        const dayTransactions = transactions.filter(t => {
+          if (!t.date) return false;
+          const itemDateStr = t.date.split('T')[0];
+          return itemDateStr === dateStr;
+        });
+        
+        const volume = dayTransactions.length;
+        const revenue = dayTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const profit = dayTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        
+        list.push({
+          dateStr,
+          label,
+          volume,
+          revenue,
+          profit,
+        });
+      }
+    } else if (trendFilter === 'mingguan') {
+      // 8 Minggu Terakhir
+      for (let i = 7; i >= 0; i--) {
+        const start = new Date();
+        start.setDate(today.getDate() - (i * 7) - 6);
+        start.setHours(0, 0, 0, 0);
+        
+        const end = new Date();
+        end.setDate(today.getDate() - (i * 7));
+        end.setHours(23, 59, 59, 999);
+        
+        const startFormatter = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' });
+        const endFormatter = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' });
+        const label = `${startFormatter.format(start)} - ${endFormatter.format(end)}`;
+        
+        const weekTransactions = transactions.filter(t => {
+          if (!t.date) return false;
+          const tDate = new Date(t.date);
+          return tDate >= start && tDate <= end;
+        });
+        
+        const volume = weekTransactions.length;
+        const revenue = weekTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const profit = weekTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        
+        list.push({
+          label,
+          volume,
+          revenue,
+          profit,
+        });
+      }
+    } else if (trendFilter === 'bulanan') {
+      // 6 Bulan Terakhir
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(today.getMonth() - i);
+        
+        const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+        
+        const formatter = new Intl.DateTimeFormat('id-ID', { month: 'long', year: '2-digit' });
+        const label = formatter.format(d);
+        
+        const monthTransactions = transactions.filter(t => {
+          if (!t.date) return false;
+          const tDate = new Date(t.date);
+          return tDate >= start && tDate <= end;
+        });
+        
+        const volume = monthTransactions.length;
+        const revenue = monthTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const profit = monthTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        
+        list.push({
+          label,
+          volume,
+          revenue,
+          profit,
+        });
+      }
+    } else if (trendFilter === 'tigaBulanan') {
+      // 4 Periode per 3 Bulan terakhir (total 12 bulan terakhir)
+      for (let i = 3; i >= 0; i--) {
+        const endMonthIndex = today.getMonth() - (i * 3);
+        const startMonthIndex = endMonthIndex - 2;
+        
+        const start = new Date(today.getFullYear(), startMonthIndex, 1, 0, 0, 0, 0);
+        const end = new Date(today.getFullYear(), endMonthIndex + 1, 0, 23, 59, 59, 999);
+        
+        const startLocaleFormatter = new Intl.DateTimeFormat('id-ID', { month: 'short' });
+        const endLocaleFormatter = new Intl.DateTimeFormat('id-ID', { month: 'short', year: '2-digit' });
+        const label = `${startLocaleFormatter.format(start)} - ${endLocaleFormatter.format(end)}`;
+        
+        const periodTransactions = transactions.filter(t => {
+          if (!t.date) return false;
+          const tDate = new Date(t.date);
+          return tDate >= start && tDate <= end;
+        });
+        
+        const volume = periodTransactions.length;
+        const revenue = periodTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const profit = periodTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        
+        list.push({
+          label,
+          volume,
+          revenue,
+          profit,
+        });
+      }
+    } else if (trendFilter === 'tahunan') {
+      // 3 Tahun Terakhir
+      const currentYear = today.getFullYear();
+      for (let i = 2; i >= 0; i--) {
+        const year = currentYear - i;
+        const start = new Date(year, 0, 1, 0, 0, 0, 0);
+        const end = new Date(year, 11, 31, 23, 59, 59, 999);
+        const label = `${year}`;
+        
+        const yearTransactions = transactions.filter(t => {
+          if (!t.date) return false;
+          const tDate = new Date(t.date);
+          return tDate >= start && tDate <= end;
+        });
+        
+        const volume = yearTransactions.length;
+        const revenue = yearTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const profit = yearTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        
+        list.push({
+          label,
+          volume,
+          revenue,
+          profit,
+        });
+      }
     }
     return list;
-  }, [transactions]);
+  }, [transactions, trendFilter]);
 
   // Tooltip custom untuk visualisasi grafik bermutu tinggi
   const CustomChartTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const isAdminOrOwner = activeRole === 'admin' || activeRole === 'owner';
       return (
         <div className="bg-slate-900 border border-slate-800 text-white p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 font-sans leading-normal">
           <p className="font-extrabold text-amber-300">{label}</p>
@@ -137,14 +260,18 @@ export default function Dashboard({
               <span>Volume Penjualan:</span>
               <span className="text-indigo-300 font-extrabold">{data.volume} Transaksi</span>
             </p>
-            <p className="flex justify-between gap-4 font-semibold">
-              <span>Total Omset:</span>
-              <span className="text-white font-extrabold">{formatIDR(data.revenue)}</span>
-            </p>
-            <p className="flex justify-between gap-4 font-semibold">
-              <span>Estimasi Profit:</span>
-              <span className="text-emerald-400 font-extrabold">{formatIDR(data.profit)}</span>
-            </p>
+            {isAdminOrOwner && (
+              <>
+                <p className="flex justify-between gap-4 font-semibold">
+                  <span>Total Omset:</span>
+                  <span className="text-white font-extrabold">{formatIDR(data.revenue)}</span>
+                </p>
+                <p className="flex justify-between gap-4 font-semibold">
+                  <span>Estimasi Profit:</span>
+                  <span className="text-emerald-400 font-extrabold">{formatIDR(data.profit)}</span>
+                </p>
+              </>
+            )}
           </div>
         </div>
       );
@@ -255,25 +382,77 @@ export default function Dashboard({
         {/* Left / Middle: Service & Quick Actions */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Recharts Area Chart: Tren Volume Penjualan 7 Hari Terakhir */}
+          {/* Recharts Area Chart: Tren Volume Penjualan dengan Filter Waktu */}
           <div className="bg-white border border-slate-200/85 rounded-3xl p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                   <TrendingUp className="text-indigo-600 animate-pulse" size={18} />
-                  Tren Volume Penjualan Harian
+                  Tren Penjualan {trendFilter === 'harian' ? 'Harian' : trendFilter === 'mingguan' ? 'Mingguan' : trendFilter === 'bulanan' ? 'Bulanan' : trendFilter === 'tigaBulanan' ? 'Per 3 Bulan' : 'Tahunan'}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Analisis visual volume transaksi & omset selama 7 hari terakhir</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visualisasi volume transaksi {trendFilter === 'harian' ? '7 hari terakhir' : trendFilter === 'mingguan' ? '8 minggu terakhir' : trendFilter === 'bulanan' ? '6 bulan terakhir' : trendFilter === 'tigaBulanan' ? '12 bulan terakhir (per 3 bulan)' : '3 tahun terakhir'}
+                </p>
               </div>
-              <div className="flex gap-2 text-xs font-semibold bg-indigo-50/50 px-3 py-1.5 rounded-xl text-indigo-700 border border-indigo-100">
-                Lapor: <span className="font-bold text-slate-900">{last7DaysData.reduce((s, d) => s + d.volume, 0)} Penjualan</span>
+              
+              <div className="flex flex-wrap items-center gap-1 bg-slate-150/40 p-1 rounded-2xl border border-slate-200">
+                <button
+                  onClick={() => setTrendFilter('harian')}
+                  className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold cursor-pointer transition-all duration-200 ${
+                    trendFilter === 'harian' 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Harian
+                </button>
+                <button
+                  onClick={() => setTrendFilter('mingguan')}
+                  className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold cursor-pointer transition-all duration-200 ${
+                    trendFilter === 'mingguan' 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Mingguan
+                </button>
+                <button
+                  onClick={() => setTrendFilter('bulanan')}
+                  className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold cursor-pointer transition-all duration-200 ${
+                    trendFilter === 'bulanan' 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Bulanan
+                </button>
+                <button
+                  onClick={() => setTrendFilter('tigaBulanan')}
+                  className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold cursor-pointer transition-all duration-200 ${
+                    trendFilter === 'tigaBulanan' 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  3 Bulan
+                </button>
+                <button
+                  onClick={() => setTrendFilter('tahunan')}
+                  className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold cursor-pointer transition-all duration-200 ${
+                    trendFilter === 'tahunan' 
+                      ? 'bg-indigo-600 text-white shadow-sm' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Tahunan
+                </button>
               </div>
             </div>
 
             <div className="h-[280px] w-full font-sans">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={last7DaysData}
+                  data={trendData}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
                   <defs>
@@ -318,24 +497,24 @@ export default function Dashboard({
             <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
               <div>
                 <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Rerata Volume</p>
-                <p className="text-sm font-extrabold text-slate-800 mt-1">
-                  {(last7DaysData.reduce((s, d) => s + d.volume, 0) / 7).toFixed(1)} / Hari
+                <p className="text-sm font-extrabold text-slate-800 mt-1 animate-fade-in">
+                  {(trendData.reduce((s, d) => s + d.volume, 0) / (trendData.length || 1)).toFixed(1)} / {trendFilter === 'harian' ? 'Hari' : trendFilter === 'mingguan' ? 'Minggu' : trendFilter === 'bulanan' ? 'Bulan' : trendFilter === 'tigaBulanan' ? '3 Bulan' : 'Tahun'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Total Omset 7H</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Total Omset</p>
                 <p className="text-sm font-extrabold text-indigo-600 mt-1 font-sans">
                   {(activeRole === 'admin' || activeRole === 'owner') 
-                    ? formatIDR(last7DaysData.reduce((s, d) => s + d.revenue, 0)) 
+                    ? formatIDR(trendData.reduce((s, d) => s + d.revenue, 0)) 
                     : 'Rp **.***.***'
                   }
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Total Profit 7H</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Total Profit</p>
                 <p className="text-sm font-extrabold text-emerald-600 mt-1 font-sans">
                   {(activeRole === 'admin' || activeRole === 'owner') 
-                    ? formatIDR(last7DaysData.reduce((s, d) => s + d.profit, 0)) 
+                    ? formatIDR(trendData.reduce((s, d) => s + d.profit, 0)) 
                     : 'Rp **.***.***'
                   }
                 </p>
