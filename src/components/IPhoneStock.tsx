@@ -40,6 +40,7 @@ export default function IPhoneStock({
   // Form Fields
   const [type, setType] = useState<ProductType>(typeFilter || 'iphone');
   const [model, setModel] = useState('');
+  const [sku, setSku] = useState(''); // State baru untuk SKU
   const [imei, setImei] = useState('');
   const [buyPrice, setBuyPrice] = useState<number>(0);
   const [repairCost, setRepairCost] = useState<number>(0);
@@ -59,7 +60,8 @@ export default function IPhoneStock({
   // Filtered Products
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (p.imei && p.imei.includes(searchTerm));
+                          (p.imei && p.imei.includes(searchTerm)) ||
+                          (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = typeFilter ? p.type === typeFilter : (filterType === 'all' || p.type === filterType);
     const matchesStatus = filterStatus === 'all' || p.status === filterStatus;
     return matchesSearch && matchesType && matchesStatus;
@@ -70,6 +72,7 @@ export default function IPhoneStock({
     setEditingId(null);
     setType(typeFilter || 'iphone');
     setModel('');
+    setSku(''); // Reset SKU
     setImei('');
     setBuyPrice(0);
     setRepairCost(0);
@@ -84,6 +87,7 @@ export default function IPhoneStock({
     setEditingId(p.id);
     setType(p.type);
     setModel(p.model);
+    setSku(p.sku || ''); // Load SKU
     setImei(p.imei || '');
     setBuyPrice(p.buyPrice);
     setRepairCost(p.repairCost);
@@ -102,6 +106,7 @@ export default function IPhoneStock({
       id: editingId || `prod-${Date.now()}`,
       type,
       model: model.trim(),
+      sku: type === 'aksesoris' ? sku.trim() : undefined, // SKU khusus aksesoris
       imei: type === 'iphone' ? imei.trim() : undefined,
       buyPrice: Number(buyPrice),
       repairCost: type === 'iphone' ? Number(repairCost) : 0,
@@ -252,16 +257,28 @@ export default function IPhoneStock({
 
             {/* Field: Stock quantity (For accessories only) */}
             {type === 'aksesoris' && (
-              <div>
-                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">Volume Stok Barang</label>
-                <input
-                  type="number"
-                  placeholder="Kuantitas stok..."
-                  value={stock}
-                  onChange={(e) => setStock(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">Volume Stok Barang</label>
+                  <input
+                    type="number"
+                    placeholder="Kuantitas stok..."
+                    value={stock}
+                    onChange={(e) => setStock(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase text-indigo-600">Nomor SKU (Stok Opname)</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: ACC-TG-IP13"
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-indigo-200 focus:border-indigo-500 rounded-xl text-xs text-indigo-800 font-bold font-mono focus:outline-none"
+                  />
+                </div>
+              </>
             )}
 
           </div>
@@ -391,6 +408,9 @@ export default function IPhoneStock({
                     
                     <td className="py-3.5 px-3">
                       <p className="font-extrabold text-slate-900 text-xs">{p.model}</p>
+                      {p.sku && (
+                        <p className="text-[10px] text-indigo-600 font-mono font-bold mt-0.5" title="Nomor SKU">SKU: {p.sku}</p>
+                      )}
                       {p.imei && (
                         <p className="text-[10px] text-slate-500 font-mono mt-0.5">IMEI: {p.imei}</p>
                       )}

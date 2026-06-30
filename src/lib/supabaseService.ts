@@ -496,6 +496,7 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
       id: a.id,
       type: 'aksesoris',
       model: a.nama_barang,
+      sku: a.sku || a.no_sku || '',
       buyPrice: Number(a.harga_modal),
       repairCost: 0,
       sellingPrice: Number(a.harga_jual),
@@ -577,7 +578,16 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
       }
     } else {
       // Accessories
-      const payload = {
+      const payloadWithSku = {
+        nama_barang: prod.model,
+        kategori: 'Aksesoris',
+        harga_modal: prod.buyPrice,
+        harga_jual: prod.sellingPrice,
+        stok: prod.stock || 0,
+        sku: prod.sku || null
+      };
+
+      const payloadFallback = {
         nama_barang: prod.model,
         kategori: 'Aksesoris',
         harga_modal: prod.buyPrice,
@@ -585,10 +595,30 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         stok: prod.stock || 0
       };
 
-      if (isIdUuid) {
-        await supabase.from('accessories').update(payload).eq('id', prod.id);
-      } else {
-        await supabase.from('accessories').insert([payload]);
+      try {
+        if (isIdUuid) {
+          const { error } = await supabase.from('accessories').update(payloadWithSku).eq('id', prod.id);
+          if (error) {
+            if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
+              const { error: errFallback } = await supabase.from('accessories').update(payloadFallback).eq('id', prod.id);
+              if (errFallback) throw errFallback;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          const { error } = await supabase.from('accessories').insert([payloadWithSku]);
+          if (error) {
+            if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
+              const { error: errFallback } = await supabase.from('accessories').insert([payloadFallback]);
+              if (errFallback) throw errFallback;
+            } else {
+              throw error;
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.error('Penyimpanan aksesoris ke Supabase gagal, mencoba tanpa SKU:', dbErr);
       }
     }
   } catch (e) {

@@ -278,7 +278,8 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
       if (p.type === 'aksesoris' && (p.stock !== undefined && p.stock <= 0)) return false;
       
       const matchesSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (p.imei && p.imei.includes(searchTerm));
+                            (p.imei && p.imei.includes(searchTerm)) ||
+                            (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesType = selectedType === 'all' || p.type === selectedType;
       
       return matchesSearch && matchesType;
@@ -787,6 +788,13 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
                   <h4 className="font-extrabold text-slate-800 text-xs mt-3 group-hover:text-indigo-600 transition line-clamp-2 min-h-[34px]">
                     {p.model}
                   </h4>
+                  {p.sku && (
+                    <div className="mt-1.5">
+                      <span className="inline-block text-[9px] font-mono text-indigo-600 font-extrabold bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-0.5">
+                        SKU: {p.sku}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">

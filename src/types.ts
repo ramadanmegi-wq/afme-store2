@@ -20,6 +20,7 @@ export interface Product {
   id: string;
   type: ProductType;
   model: string;
+  sku?: string; // Nomor SKU untuk stok opname aksesoris
   imei?: string; // Khusus iPhone
   buyPrice: number; // Harga modal/beli
   repairCost: number; // Biaya perbaikan modal (Khusus iPhone)
