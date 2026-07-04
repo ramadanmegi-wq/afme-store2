@@ -1020,6 +1020,9 @@ export default function App() {
                 transactions={transactions}
                 services={services}
                 activeRole={activeRole}
+                onUpdateTransaction={handleUpdateTransaction}
+                products={products}
+                onSaveProduct={handleSaveProduct}
               />
             )}
 

@@ -12,24 +12,250 @@ import {
   ShoppingBag, 
   Wrench,
   AlertCircle,
-  EyeOff
+  EyeOff,
+  Pencil,
+  Trash2,
+  Plus,
+  Minus,
+  X,
+  Check,
+  RefreshCw
 } from 'lucide-react';
-import { Transaction, Service, UserRole } from '../types';
+import { Transaction, Service, UserRole, Product } from '../types';
 
 interface LaporanTransaksiProps {
   transactions: Transaction[];
   services: Service[];
   activeRole: UserRole;
+  onUpdateTransaction?: (trx: Transaction) => Promise<void>;
+  products?: Product[];
+  onSaveProduct?: (prod: Product) => Promise<void>;
 }
 
 export default function LaporanTransaksi({
   transactions,
   services,
-  activeRole
+  activeRole,
+  onUpdateTransaction,
+  products,
+  onSaveProduct
 }: LaporanTransaksiProps) {
   const [selectedTab, setSelectedTab] = useState<'harian' | 'mingguan' | 'bulanan'>('harian');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'semua' | 'pos' | 'service'>('semua');
+
+  // States for Editing/Redoing
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [searchProductQuery, setSearchProductQuery] = useState('');
+  
+  const handleStartEdit = (trx: Transaction) => {
+    setEditingTransaction(JSON.parse(JSON.stringify(trx)));
+    setSearchProductQuery('');
+  };
+
+  const handleUpdateTradeInValue = (val: number) => {
+    if (!editingTransaction || !editingTransaction.tradeIn) return;
+    const tradeIn = { ...editingTransaction.tradeIn, buyPrice: Math.max(0, val) };
+    
+    // Recalculate totals
+    const totalAmount = editingTransaction.items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0) - tradeIn.buyPrice;
+    const totalModal = editingTransaction.items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+    const totalProfit = totalAmount - totalModal + (tradeIn.buyPrice - (tradeIn.repairCost || 0));
+
+    setEditingTransaction({
+      ...editingTransaction,
+      tradeIn,
+      totalAmount,
+      totalProfit
+    });
+  };
+
+  const handleUpdateTradeInRepair = (val: number) => {
+    if (!editingTransaction || !editingTransaction.tradeIn) return;
+    const tradeIn = { ...editingTransaction.tradeIn, repairCost: Math.max(0, val) };
+    
+    // Recalculate totals
+    const totalAmount = editingTransaction.items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0) - tradeIn.buyPrice;
+    const totalModal = editingTransaction.items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+    const totalProfit = totalAmount - totalModal + (tradeIn.buyPrice - tradeIn.repairCost);
+
+    setEditingTransaction({
+      ...editingTransaction,
+      tradeIn,
+      totalAmount,
+      totalProfit
+    });
+  };
+
+  const handleAddItem = (prod: Product) => {
+    if (!editingTransaction) return;
+    const items = [...editingTransaction.items];
+    const exists = items.find(it => it.productId === prod.id);
+    if (exists) {
+      if (prod.type === 'iphone') return; // 1 iPhone only
+      exists.quantity += 1;
+    } else {
+      items.push({
+        productId: prod.id,
+        model: prod.model,
+        type: prod.type,
+        sellingPrice: prod.sellingPrice,
+        buyPrice: prod.buyPrice,
+        repairCost: prod.repairCost || 0,
+        quantity: 1
+      });
+    }
+
+    const tradeInDeduction = editingTransaction.tradeIn ? editingTransaction.tradeIn.buyPrice : 0;
+    const totalAmount = items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0) - tradeInDeduction;
+    const totalModal = items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+    const totalProfit = totalAmount - totalModal + (editingTransaction.tradeIn ? (editingTransaction.tradeIn.buyPrice - (editingTransaction.tradeIn.repairCost || 0)) : 0);
+
+    setEditingTransaction({
+      ...editingTransaction,
+      items,
+      totalAmount,
+      totalProfit
+    });
+  };
+
+  const handleRemoveItem = (productId: string) => {
+    if (!editingTransaction) return;
+    const items = editingTransaction.items.filter(it => it.productId !== productId);
+    
+    const tradeInDeduction = editingTransaction.tradeIn ? editingTransaction.tradeIn.buyPrice : 0;
+    const totalAmount = items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0) - tradeInDeduction;
+    const totalModal = items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+    const totalProfit = totalAmount - totalModal + (editingTransaction.tradeIn ? (editingTransaction.tradeIn.buyPrice - (editingTransaction.tradeIn.repairCost || 0)) : 0);
+
+    setEditingTransaction({
+      ...editingTransaction,
+      items,
+      totalAmount,
+      totalProfit
+    });
+  };
+
+  const handleUpdateItemPrice = (productId: string, price: number) => {
+    if (!editingTransaction) return;
+    const items = editingTransaction.items.map(it => {
+      if (it.productId === productId) {
+        return { ...it, sellingPrice: Math.max(0, price) };
+      }
+      return it;
+    });
+
+    const tradeInDeduction = editingTransaction.tradeIn ? editingTransaction.tradeIn.buyPrice : 0;
+    const totalAmount = items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0) - tradeInDeduction;
+    const totalModal = items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+    const totalProfit = totalAmount - totalModal + (editingTransaction.tradeIn ? (editingTransaction.tradeIn.buyPrice - (editingTransaction.tradeIn.repairCost || 0)) : 0);
+
+    setEditingTransaction({
+      ...editingTransaction,
+      items,
+      totalAmount,
+      totalProfit
+    });
+  };
+
+  const handleUpdateItemQty = (productId: string, qty: number) => {
+    if (!editingTransaction) return;
+    const items = editingTransaction.items.map(it => {
+      if (it.productId === productId) {
+        return { ...it, quantity: Math.max(1, qty) };
+      }
+      return it;
+    });
+
+    const tradeInDeduction = editingTransaction.tradeIn ? editingTransaction.tradeIn.buyPrice : 0;
+    const totalAmount = items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0) - tradeInDeduction;
+    const totalModal = items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+    const totalProfit = totalAmount - totalModal + (editingTransaction.tradeIn ? (editingTransaction.tradeIn.buyPrice - (editingTransaction.tradeIn.repairCost || 0)) : 0);
+
+    setEditingTransaction({
+      ...editingTransaction,
+      items,
+      totalAmount,
+      totalProfit
+    });
+  };
+
+  const handleSaveTransactionEdit = async () => {
+    if (!editingTransaction || !onUpdateTransaction) return;
+    setIsSavingEdit(true);
+    
+    try {
+      const originalTrx = transactions.find(t => t.id === editingTransaction.id);
+      
+      if (originalTrx && products && onSaveProduct) {
+        const originalItems = originalTrx.items;
+        const editedItems = editingTransaction.items;
+
+        const originalMap: Record<string, number> = {};
+        originalItems.forEach(it => {
+          originalMap[it.productId] = (originalMap[it.productId] || 0) + it.quantity;
+        });
+
+        const editedMap: Record<string, number> = {};
+        editedItems.forEach(it => {
+          editedMap[it.productId] = (editedMap[it.productId] || 0) + it.quantity;
+        });
+
+        const allProductIds = Array.from(new Set([
+          ...originalItems.map(it => it.productId),
+          ...editedItems.map(it => it.productId)
+        ]));
+
+        for (const pid of allProductIds) {
+          const oldQty = originalMap[pid] || 0;
+          const newQty = editedMap[pid] || 0;
+          const diff = newQty - oldQty;
+
+          if (diff !== 0) {
+            const prod = products.find(p => p.id === pid);
+            if (prod) {
+              if (prod.type === 'aksesoris') {
+                const updatedProduct = {
+                  ...prod,
+                  stock: Math.max(0, (prod.stock || 0) - diff),
+                  status: (Math.max(0, (prod.stock || 0) - diff) > 0) ? 'available' as const : 'sold' as const
+                };
+                await onSaveProduct(updatedProduct);
+              } else if (prod.type === 'iphone') {
+                const updatedProduct = {
+                  ...prod,
+                  status: (newQty > 0) ? 'sold' as const : 'available' as const
+                };
+                await onSaveProduct(updatedProduct);
+              }
+            }
+          }
+        }
+      }
+
+      await onUpdateTransaction(editingTransaction);
+      setEditingTransaction(null);
+    } catch (e) {
+      console.error("Gagal menyimpan perubahan transaksi:", e);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Product list for catalog in edit modal
+  const availableInventory = useMemo(() => {
+    if (!products) return [];
+    return products.filter(p => {
+      if (p.status !== 'available') return false;
+      if (p.type === 'aksesoris' && (p.stock || 0) <= 0) return false;
+      if (searchProductQuery.trim() !== '') {
+        const q = searchProductQuery.toLowerCase();
+        return p.model.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.imei && p.imei.includes(q));
+      }
+      return true;
+    }).slice(0, 5);
+  }, [products, searchProductQuery]);
   
   // Date filter range state
   const [startDate, setStartDate] = useState<string>(() => {
@@ -620,6 +846,7 @@ export default function LaporanTransaksi({
                                 <th className="py-2.5 px-3 text-right">Laba Bersih</th>
                               </>
                             )}
+                            <th className="py-2.5 px-4 text-center">Aksi</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
@@ -636,7 +863,7 @@ export default function LaporanTransaksi({
                                   item.type === 'pos' 
                                     ? 'bg-sky-50 text-sky-700 border border-sky-100' 
                                     : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                }`}>
+                                }}`}>
                                   {item.type === 'pos' ? <ShoppingBag size={10} /> : <Wrench size={10} />}
                                   {item.type === 'pos' ? 'POS' : 'SERVICE'}
                                 </span>
@@ -663,6 +890,20 @@ export default function LaporanTransaksi({
                                   </td>
                                 </>
                               )}
+                              <td className="py-3 px-4 text-center whitespace-nowrap">
+                                {item.type === 'pos' ? (
+                                  <button
+                                    onClick={() => handleStartEdit(item.originalData)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded-lg text-[10.5px] font-extrabold transition cursor-pointer border border-amber-200"
+                                    title="Edit atau Redo Transaksi Penjualan"
+                                  >
+                                    <Pencil size={11} />
+                                    <span>Edit/Redo</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic font-medium">Servis Selesai</span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -687,6 +928,386 @@ export default function LaporanTransaksi({
           </div>
         )}
       </div>
+
+      {/* ========================================================= */}
+      {/* EDIT / REDO TRANSACTION MODAL                             */}
+      {/* ========================================================= */}
+      {editingTransaction && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-scaleUp">
+            
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <span className="text-[10px] bg-amber-50 text-amber-700 font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border border-amber-200">
+                  Mode Edit &amp; Redo Transaksi
+                </span>
+                <h3 className="text-sm font-black text-slate-900 mt-1">
+                  ID Transaksi: <span className="font-mono text-indigo-600">{editingTransaction.id.toUpperCase()}</span>
+                </h3>
+              </div>
+              <button 
+                onClick={() => setEditingTransaction(null)}
+                className="w-8 h-8 rounded-xl hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: Items and Selection (7 Cols) */}
+              <div className="lg:col-span-7 space-y-5">
+                
+                {/* 1. Customer Information */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                  <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Informasi Pelanggan &amp; Nota
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1">Nama Pembeli</label>
+                      <input 
+                        type="text"
+                        value={editingTransaction.customerName}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, customerName: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1">Nomor HP</label>
+                      <input 
+                        type="text"
+                        value={editingTransaction.customerPhone}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, customerPhone: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Transaction Cart Items */}
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Daftar Keranjang Belanja
+                  </h4>
+                  
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {editingTransaction.items.map((it) => {
+                      const isIphone = it.type === 'iphone';
+                      return (
+                        <div key={it.productId} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl hover:border-slate-300 transition gap-3">
+                          <div className="min-w-0 flex-1">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                              isIphone ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {isIphone ? 'iPhone' : 'Aksesoris'}
+                            </span>
+                            <p className="font-extrabold text-slate-900 text-xs mt-0.5 truncate">{it.model}</p>
+                            
+                            {/* Interactive Price Override */}
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] text-slate-400">Harga:</span>
+                              <input 
+                                type="number"
+                                value={it.sellingPrice}
+                                onChange={(e) => handleUpdateItemPrice(it.productId, Number(e.target.value))}
+                                className="w-32 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold font-mono focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {/* Quantity Controls (Only for accessories) */}
+                            {!isIphone ? (
+                              <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                                <button 
+                                  type="button"
+                                  onClick={() => handleUpdateItemQty(it.productId, it.quantity - 1)}
+                                  className="w-6 h-6 flex items-center justify-center text-slate-500 hover:bg-slate-200 font-bold cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <span className="px-2 text-xs font-bold font-mono text-slate-800">{it.quantity}</span>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleUpdateItemQty(it.productId, it.quantity + 1)}
+                                  className="w-6 h-6 flex items-center justify-center text-slate-500 hover:bg-slate-200 font-bold cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-450 font-black px-2 py-1 bg-slate-100 rounded-lg">1 Unit</span>
+                            )}
+
+                            {/* Remove Item */}
+                            <button 
+                              type="button"
+                              onClick={() => handleRemoveItem(it.productId)}
+                              className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 flex items-center justify-center transition cursor-pointer"
+                              title="Hapus barang dari transaksi ini"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {editingTransaction.items.length === 0 && (
+                      <div className="py-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-2xl">
+                        Keranjang kosong. Tambahkan barang di bawah.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Search and Add New items to transaction */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                  <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Tambahkan Barang Baru ke Transaksi
+                  </h4>
+                  
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <Search size={12} />
+                    </span>
+                    <input 
+                      type="text"
+                      placeholder="Cari model barang, IMEI, atau SKU aksesoris..."
+                      value={searchProductQuery}
+                      onChange={(e) => setSearchProductQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  {searchProductQuery.trim() !== '' && (
+                    <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden shadow-sm animate-fadeIn">
+                      {availableInventory.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between p-2.5 text-xs hover:bg-slate-50">
+                          <div>
+                            <p className="font-extrabold text-slate-800">{p.model}</p>
+                            <p className="text-[9.5px] text-slate-400 font-mono">
+                              {p.type === 'iphone' ? `IMEI: ${p.imei}` : `SKU: ${p.sku || '-'} • Stok: ${p.stock || 0}`}
+                            </p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => handleAddItem(p)}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white rounded-lg text-[10.5px] font-bold transition cursor-pointer"
+                          >
+                            + Tambah
+                          </button>
+                        </div>
+                      ))}
+
+                      {availableInventory.length === 0 && (
+                        <p className="p-3 text-center text-slate-400 text-[11px]">Tidak ada produk yang cocok / tersedia</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Right Column: Financial Calculations & Trade-In (5 Cols) */}
+              <div className="lg:col-span-5 space-y-5">
+                
+                {/* 4. Trade-In Form details */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                      Detail Tukar Tambah (Trade-In)
+                    </h4>
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
+                      editingTransaction.tradeIn ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-200 text-slate-500'
+                    }`}>
+                      {editingTransaction.tradeIn ? 'Aktif' : 'Tidak Ada'}
+                    </span>
+                  </div>
+
+                  {editingTransaction.tradeIn ? (
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 font-bold mb-1">Model HP Ditukar</label>
+                        <input 
+                          type="text"
+                          value={editingTransaction.tradeIn.model}
+                          onChange={(e) => {
+                            if (!editingTransaction.tradeIn) return;
+                            setEditingTransaction({
+                              ...editingTransaction,
+                              tradeIn: { ...editingTransaction.tradeIn, model: e.target.value }
+                            });
+                          }}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-500 font-bold mb-1">IMEI HP Ditukar</label>
+                          <input 
+                            type="text"
+                            value={editingTransaction.tradeIn.imei}
+                            onChange={(e) => {
+                              if (!editingTransaction.tradeIn) return;
+                              setEditingTransaction({
+                                ...editingTransaction,
+                                tradeIn: { ...editingTransaction.tradeIn, imei: e.target.value }
+                              });
+                            }}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-mono focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 font-bold mb-1">Harga Beli HP (Dihargai)</label>
+                          <input 
+                            type="number"
+                            value={editingTransaction.tradeIn.buyPrice}
+                            onChange={(e) => handleUpdateTradeInValue(Number(e.target.value))}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-mono focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 font-bold mb-1">Estimasi Biaya Reparasi Toko</label>
+                        <input 
+                          type="number"
+                          value={editingTransaction.tradeIn.repairCost}
+                          onChange={(e) => handleUpdateTradeInRepair(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-mono focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const items = editingTransaction.items;
+                          const totalAmount = items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0);
+                          const totalModal = items.reduce((s, it) => s + ((it.buyPrice + (it.repairCost || 0)) * it.quantity), 0);
+                          const totalProfit = totalAmount - totalModal;
+
+                          setEditingTransaction({
+                            ...editingTransaction,
+                            tradeIn: undefined,
+                            totalAmount,
+                            totalProfit
+                          });
+                        }}
+                        className="w-full py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[10.5px] font-bold transition flex items-center justify-center gap-1 border border-rose-100 cursor-pointer"
+                      >
+                        <Trash2 size={11} />
+                        <span>Hapus Fitur Tukar Tambah</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setEditingTransaction({
+                            ...editingTransaction,
+                            tradeIn: {
+                              model: 'iPhone X 64GB',
+                              imei: '358123456789012',
+                              buyPrice: 1500000,
+                              repairCost: 0
+                            },
+                            totalAmount: editingTransaction.totalAmount - 1500000,
+                            totalProfit: editingTransaction.totalProfit + 1500000
+                          });
+                        }}
+                        className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border border-indigo-200 cursor-pointer"
+                      >
+                        <Plus size={12} />
+                        <span>Tambahkan Tukar Tambah (Trade-In)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Financial Summary Panel */}
+                <div className="bg-slate-900 text-white p-5 rounded-3xl space-y-4 shadow-lg">
+                  <h4 className="text-[9.5px] font-black uppercase tracking-widest text-slate-400">
+                    Kalkulator Rekapitulasi Keuangan
+                  </h4>
+
+                  <div className="space-y-2 text-xs border-b border-slate-800 pb-3">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Total Harga Barang</span>
+                      <span className="font-mono">
+                        {formatIDR(editingTransaction.items.reduce((s, it) => s + (it.sellingPrice * it.quantity), 0))}
+                      </span>
+                    </div>
+
+                    {editingTransaction.tradeIn && (
+                      <div className="flex justify-between text-amber-450 font-semibold">
+                        <span>Potongan Tukar Tambah</span>
+                        <span className="font-mono">
+                          -{formatIDR(editingTransaction.tradeIn.buyPrice)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-slate-400 font-black uppercase">Final Omset</span>
+                      <span className="text-xl font-extrabold text-amber-400 font-mono">
+                        {formatIDR(editingTransaction.totalAmount)}
+                      </span>
+                    </div>
+
+                    {isAdminOrOwner && (
+                      <div className="flex justify-between items-baseline pt-2">
+                        <span className="text-[10px] text-slate-400 font-black uppercase">Laba Bersih Toko</span>
+                        <span className="text-sm font-extrabold text-emerald-400 font-mono">
+                          {formatIDR(editingTransaction.totalProfit)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+              <button 
+                type="button"
+                onClick={() => setEditingTransaction(null)}
+                className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+                disabled={isSavingEdit}
+              >
+                Batalkan
+              </button>
+              
+              <button 
+                type="button"
+                onClick={handleSaveTransactionEdit}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    <span>Simpan Perubahan &amp; Redo</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Hidden print area template to avoid direct style interference */}
       <div id="laporan-transaksi-print-area" className="hidden"></div>

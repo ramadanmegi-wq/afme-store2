@@ -107,23 +107,44 @@ export default function Dashboard({
         const formatter = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' });
         const label = formatter.format(d);
         
-        // Filter transaksi pada tanggal ini
+        // Filter transaksi POS pada tanggal ini
         const dayTransactions = transactions.filter(t => {
           if (!t.date) return false;
           const itemDateStr = t.date.split('T')[0];
           return itemDateStr === dateStr;
         });
+
+        // Filter service pada tanggal ini
+        const dayServices = services.filter(s => {
+          if (!s.date) return false;
+          const itemDateStr = s.date.split('T')[0];
+          return itemDateStr === dateStr;
+        });
         
-        const volume = dayTransactions.length;
-        const revenue = dayTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-        const profit = dayTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const posVolume = dayTransactions.length;
+        const serviceVolume = dayServices.length;
+        const volume = posVolume + serviceVolume;
+        
+        const posRevenue = dayTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const serviceRevenue = dayServices.reduce((sum, s) => sum + s.cost, 0);
+        const revenue = posRevenue + serviceRevenue;
+        
+        const posProfit = dayTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const serviceProfit = dayServices.filter(s => s.status === 'selesai').reduce((sum, s) => sum + (s.cost - s.capitalCost), 0);
+        const profit = posProfit + serviceProfit;
         
         list.push({
           dateStr,
           label,
           volume,
+          posVolume,
+          serviceVolume,
           revenue,
+          posRevenue,
+          serviceRevenue,
           profit,
+          posProfit,
+          serviceProfit,
         });
       }
     } else if (trendFilter === 'mingguan') {
@@ -146,16 +167,36 @@ export default function Dashboard({
           const tDate = new Date(t.date);
           return tDate >= start && tDate <= end;
         });
+
+        const weekServices = services.filter(s => {
+          if (!s.date) return false;
+          const sDate = new Date(s.date);
+          return sDate >= start && sDate <= end;
+        });
         
-        const volume = weekTransactions.length;
-        const revenue = weekTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-        const profit = weekTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const posVolume = weekTransactions.length;
+        const serviceVolume = weekServices.length;
+        const volume = posVolume + serviceVolume;
+        
+        const posRevenue = weekTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const serviceRevenue = weekServices.reduce((sum, s) => sum + s.cost, 0);
+        const revenue = posRevenue + serviceRevenue;
+        
+        const posProfit = weekTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const serviceProfit = weekServices.filter(s => s.status === 'selesai').reduce((sum, s) => sum + (s.cost - s.capitalCost), 0);
+        const profit = posProfit + serviceProfit;
         
         list.push({
           label,
           volume,
+          posVolume,
+          serviceVolume,
           revenue,
+          posRevenue,
+          serviceRevenue,
           profit,
+          posProfit,
+          serviceProfit,
         });
       }
     } else if (trendFilter === 'bulanan') {
@@ -175,16 +216,36 @@ export default function Dashboard({
           const tDate = new Date(t.date);
           return tDate >= start && tDate <= end;
         });
+
+        const monthServices = services.filter(s => {
+          if (!s.date) return false;
+          const sDate = new Date(s.date);
+          return sDate >= start && sDate <= end;
+        });
         
-        const volume = monthTransactions.length;
-        const revenue = monthTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-        const profit = monthTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const posVolume = monthTransactions.length;
+        const serviceVolume = monthServices.length;
+        const volume = posVolume + serviceVolume;
+        
+        const posRevenue = monthTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const serviceRevenue = monthServices.reduce((sum, s) => sum + s.cost, 0);
+        const revenue = posRevenue + serviceRevenue;
+        
+        const posProfit = monthTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const serviceProfit = monthServices.filter(s => s.status === 'selesai').reduce((sum, s) => sum + (s.cost - s.capitalCost), 0);
+        const profit = posProfit + serviceProfit;
         
         list.push({
           label,
           volume,
+          posVolume,
+          serviceVolume,
           revenue,
+          posRevenue,
+          serviceRevenue,
           profit,
+          posProfit,
+          serviceProfit,
         });
       }
     } else if (trendFilter === 'tigaBulanan') {
@@ -205,16 +266,36 @@ export default function Dashboard({
           const tDate = new Date(t.date);
           return tDate >= start && tDate <= end;
         });
+
+        const periodServices = services.filter(s => {
+          if (!s.date) return false;
+          const sDate = new Date(s.date);
+          return sDate >= start && sDate <= end;
+        });
         
-        const volume = periodTransactions.length;
-        const revenue = periodTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-        const profit = periodTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const posVolume = periodTransactions.length;
+        const serviceVolume = periodServices.length;
+        const volume = posVolume + serviceVolume;
+        
+        const posRevenue = periodTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const serviceRevenue = periodServices.reduce((sum, s) => sum + s.cost, 0);
+        const revenue = posRevenue + serviceRevenue;
+        
+        const posProfit = periodTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const serviceProfit = periodServices.filter(s => s.status === 'selesai').reduce((sum, s) => sum + (s.cost - s.capitalCost), 0);
+        const profit = posProfit + serviceProfit;
         
         list.push({
           label,
           volume,
+          posVolume,
+          serviceVolume,
           revenue,
+          posRevenue,
+          serviceRevenue,
           profit,
+          posProfit,
+          serviceProfit,
         });
       }
     } else if (trendFilter === 'tahunan') {
@@ -231,21 +312,41 @@ export default function Dashboard({
           const tDate = new Date(t.date);
           return tDate >= start && tDate <= end;
         });
+
+        const yearServices = services.filter(s => {
+          if (!s.date) return false;
+          const sDate = new Date(s.date);
+          return sDate >= start && sDate <= end;
+        });
         
-        const volume = yearTransactions.length;
-        const revenue = yearTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
-        const profit = yearTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const posVolume = yearTransactions.length;
+        const serviceVolume = yearServices.length;
+        const volume = posVolume + serviceVolume;
+        
+        const posRevenue = yearTransactions.reduce((sum, t) => sum + t.totalAmount, 0);
+        const serviceRevenue = yearServices.reduce((sum, s) => sum + s.cost, 0);
+        const revenue = posRevenue + serviceRevenue;
+        
+        const posProfit = yearTransactions.reduce((sum, t) => sum + t.totalProfit, 0);
+        const serviceProfit = yearServices.filter(s => s.status === 'selesai').reduce((sum, s) => sum + (s.cost - s.capitalCost), 0);
+        const profit = posProfit + serviceProfit;
         
         list.push({
           label,
           volume,
+          posVolume,
+          serviceVolume,
           revenue,
+          posRevenue,
+          serviceRevenue,
           profit,
+          posProfit,
+          serviceProfit,
         });
       }
     }
     return list;
-  }, [transactions, trendFilter]);
+  }, [transactions, services, trendFilter]);
 
   // Tooltip custom untuk visualisasi grafik bermutu tinggi
   const CustomChartTooltip = ({ active, payload, label }: any) => {
@@ -255,21 +356,43 @@ export default function Dashboard({
       return (
         <div className="bg-slate-900 border border-slate-800 text-white p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 font-sans leading-normal">
           <p className="font-extrabold text-amber-300">{label}</p>
-          <div className="space-y-1 text-slate-300">
+          <div className="space-y-1.5 text-slate-300">
             <p className="flex justify-between gap-4 font-semibold">
-              <span>Volume Penjualan:</span>
-              <span className="text-indigo-300 font-extrabold">{data.volume} Transaksi</span>
+              <span>Total Transaksi:</span>
+              <span className="text-white font-black">{data.volume} Transaksi</span>
             </p>
+            <div className="pl-2 border-l border-slate-700 space-y-0.5 text-[10.5px] text-slate-400">
+              <p className="flex justify-between gap-4">
+                <span>• Penjualan POS:</span>
+                <span className="font-medium text-slate-300">{data.posVolume}</span>
+              </p>
+              <p className="flex justify-between gap-4">
+                <span>• Servis HP:</span>
+                <span className="font-medium text-slate-300">{data.serviceVolume}</span>
+              </p>
+            </div>
             {isAdminOrOwner && (
               <>
-                <p className="flex justify-between gap-4 font-semibold">
-                  <span>Total Omset:</span>
-                  <span className="text-white font-extrabold">{formatIDR(data.revenue)}</span>
-                </p>
-                <p className="flex justify-between gap-4 font-semibold">
-                  <span>Estimasi Profit:</span>
-                  <span className="text-emerald-400 font-extrabold">{formatIDR(data.profit)}</span>
-                </p>
+                <div className="border-t border-slate-800 my-1 pt-1 space-y-1">
+                  <p className="flex justify-between gap-4 font-semibold">
+                    <span>Total Omset:</span>
+                    <span className="text-indigo-300 font-extrabold">{formatIDR(data.revenue)}</span>
+                  </p>
+                  <div className="pl-2 border-l border-slate-700 space-y-0.5 text-[10.5px] text-slate-400">
+                    <p className="flex justify-between gap-4">
+                      <span>• Omset POS:</span>
+                      <span>{formatIDR(data.posRevenue)}</span>
+                    </p>
+                    <p className="flex justify-between gap-4">
+                      <span>• Omset Servis:</span>
+                      <span>{formatIDR(data.serviceRevenue)}</span>
+                    </p>
+                  </div>
+                  <p className="flex justify-between gap-4 font-semibold text-emerald-400 pt-1">
+                    <span>Estimasi Profit:</span>
+                    <span className="font-extrabold">{formatIDR(data.profit)}</span>
+                  </p>
+                </div>
               </>
             )}
           </div>
@@ -486,7 +609,7 @@ export default function Dashboard({
                     strokeWidth={2.5} 
                     fillOpacity={1} 
                     fill="url(#colorVolume)" 
-                    name="Volume Penjualan"
+                    name="Total Transaksi"
                     activeDot={{ r: 6, strokeWidth: 0, fill: '#4f46e5' }}
                   />
                 </AreaChart>

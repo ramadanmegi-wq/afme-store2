@@ -481,28 +481,59 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
 
     if (accErr) throw accErr;
 
-    const hpList: Product[] = (hpData || []).map(p => ({
-      id: p.id,
-      type: 'iphone',
-      model: p.nama_produk,
-      imei: p.imei || '',
-      buyPrice: Number(p.harga_modal),
-      repairCost: (p.biaya_perbaikan !== undefined && p.biaya_perbaikan !== null) ? Number(p.biaya_perbaikan) : 0,
-      sellingPrice: Number(p.harga_jual),
-      status: p.stok > 0 ? 'available' : 'sold'
-    }));
+    const hpList: Product[] = (hpData || []).map(p => {
+      const model = p.nama_produk || p.model || '';
+      const buyPrice = Number(p.harga_modal !== undefined ? p.harga_modal : (p.buy_price !== undefined ? p.buy_price : 0));
+      const repairCost = Number(p.biaya_perbaikan !== undefined ? p.biaya_perbaikan : (p.repair_cost !== undefined ? p.repair_cost : 0));
+      const sellingPrice = Number(p.harga_jual !== undefined ? p.harga_jual : (p.selling_price !== undefined ? p.selling_price : 0));
+      
+      let isAvailable = true;
+      if (p.stok !== undefined && p.stok !== null) {
+        isAvailable = Number(p.stok) > 0;
+      } else if (p.stock !== undefined && p.stock !== null) {
+        isAvailable = Number(p.stock) > 0;
+      } else if (p.status !== undefined && p.status !== null) {
+        isAvailable = p.status === 'available';
+      }
 
-    const accList: Product[] = (accData || []).map(a => ({
-      id: a.id,
-      type: 'aksesoris',
-      model: a.nama_barang,
-      sku: a.sku || a.no_sku || '',
-      buyPrice: Number(a.harga_modal),
-      repairCost: 0,
-      sellingPrice: Number(a.harga_jual),
-      status: a.stok > 0 ? 'available' : 'sold',
-      stock: Number(a.stok)
-    }));
+      return {
+        id: p.id,
+        type: 'iphone',
+        model,
+        imei: p.imei || '',
+        buyPrice,
+        repairCost,
+        sellingPrice,
+        status: isAvailable ? 'available' : 'sold',
+        condition: p.kondisi || p.condition || 'Second'
+      };
+    });
+
+    const accList: Product[] = (accData || []).map(a => {
+      const model = a.nama_barang || a.model || '';
+      const sku = a.sku || a.no_sku || '';
+      const buyPrice = Number(a.harga_modal !== undefined ? a.harga_modal : (a.buy_price !== undefined ? a.buy_price : 0));
+      const sellingPrice = Number(a.harga_jual !== undefined ? a.harga_jual : (a.selling_price !== undefined ? a.selling_price : 0));
+      
+      let stock = 0;
+      if (a.stok !== undefined && a.stok !== null) {
+        stock = Number(a.stok);
+      } else if (a.stock !== undefined && a.stock !== null) {
+        stock = Number(a.stock);
+      }
+
+      return {
+        id: a.id,
+        type: 'aksesoris',
+        model,
+        sku,
+        buyPrice,
+        repairCost: 0,
+        sellingPrice,
+        status: stock > 0 ? 'available' : 'sold',
+        stock
+      };
+    });
 
     return [...hpList, ...accList];
   } catch (e) {
@@ -991,6 +1022,73 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
           qty: item.quantity,
           keterangan: `Penjualan kasir nomor transaksi ${orderNo}`
         }]);
+      }
+    }
+
+    // 4. Jika ada Trade-In, tambahkan unit trade-in tersebut ke tabel products Supabase
+    if (trx.tradeIn) {
+      const kapasitasMatch = trx.tradeIn.model.match(/(\d+GB|\d+TB)/i);
+      const kapasitas = kapasitasMatch ? kapasitasMatch[0] : '';
+      
+      const warnaMatch = trx.tradeIn.model.match(/(Black|White|Gold|Silver|Graphite|Sierra Blue|Pacific Blue|Deep Purple|Pink|Blue|Red|Green)/i);
+      const warna = warnaMatch ? warnaMatch[0] : '';
+
+      const tradeInPayload = {
+        nama_produk: `${trx.tradeIn.model} (Trade-In)`,
+        imei: trx.tradeIn.imei || null,
+        kategori: 'iPhone',
+        merek: 'Apple',
+        warna: warna || 'Lainnya',
+        kapasitas: kapasitas || '128GB',
+        harga_modal: trx.tradeIn.buyPrice,
+        biaya_perbaikan: trx.tradeIn.repairCost || 0,
+        harga_jual: Math.round(trx.tradeIn.buyPrice * 1.25), // Prediksi harga jual default
+        stok: 1,
+        kondisi: 'Second'
+      };
+
+      const tradeInFallback = {
+        nama_produk: `${trx.tradeIn.model} (Trade-In)`,
+        imei: trx.tradeIn.imei || null,
+        kategori: 'iPhone',
+        merek: 'Apple',
+        warna: warna || 'Lainnya',
+        kapasitas: kapasitas || '128GB',
+        harga_modal: trx.tradeIn.buyPrice + (trx.tradeIn.repairCost || 0),
+        harga_jual: Math.round(trx.tradeIn.buyPrice * 1.25),
+        stok: 1,
+        kondisi: 'Second'
+      };
+
+      try {
+        let { error: tradeInErr } = await supabase.from('products').insert([tradeInPayload]);
+        if (tradeInErr) {
+          if (tradeInErr.code === '42703' || tradeInErr.message?.includes('biaya_perbaikan') || tradeInErr.message?.includes('column')) {
+            const { error: fallbackErr } = await supabase.from('products').insert([tradeInFallback]);
+            tradeInErr = fallbackErr;
+          }
+        }
+        
+        if (tradeInErr && (tradeInErr.code === '42703' || tradeInErr.message?.includes('column') || tradeInErr.message?.includes('nama_produk') || tradeInErr.message?.includes('kategori'))) {
+          const tradeInEnglishPayload = {
+            type: 'iphone',
+            model: `${trx.tradeIn.model} (Trade-In)`,
+            imei: trx.tradeIn.imei || null,
+            buy_price: trx.tradeIn.buyPrice,
+            repair_cost: trx.tradeIn.repairCost || 0,
+            selling_price: Math.round(trx.tradeIn.buyPrice * 1.25),
+            status: 'available',
+            stock: 1
+          };
+          const { error: engErr } = await supabase.from('products').insert([tradeInEnglishPayload]);
+          if (engErr) {
+            console.error('Penyimpanan detail HP Trade-In English-Fallback gagal:', engErr);
+          }
+        } else if (tradeInErr) {
+          console.error('Penyimpanan detail HP Trade-In gagal:', tradeInErr);
+        }
+      } catch (dbErr) {
+        console.error('Penyimpanan detail HP Trade-In gagal (Exception):', dbErr);
       }
     }
   } catch (e) {

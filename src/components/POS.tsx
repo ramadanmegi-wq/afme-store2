@@ -386,10 +386,25 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
       return;
     }
 
+    if (hasTradeIn) {
+      if (!tradeInModel.trim()) {
+        setValidationError('Model HP Tukar Tambah wajib diisi.');
+        return;
+      }
+      if (!tradeInImei.trim() || tradeInImei.trim().length < 5) {
+        setValidationError('IMEI HP Tukar Tambah wajib diisi (minimal 5 digit).');
+        return;
+      }
+      if (tradeInValue <= 0) {
+        setValidationError('Harga dibeli HP Tukar Tambah wajib diisi dengan nilai di atas Rp 0.');
+        return;
+      }
+    }
+
     const tradeInObj: TradeInItem | undefined = hasTradeIn && tradeInModel && tradeInImei && tradeInValue > 0
       ? {
-          model: tradeInModel,
-          imei: tradeInImei,
+          model: tradeInModel.trim(),
+          imei: tradeInImei.trim(),
           buyPrice: tradeInValue,
           repairCost: tradeInRepairCost
         }
