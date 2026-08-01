@@ -104,8 +104,8 @@ export default function CustomerRoster({
 
   // Normalize name & phone to handle variations gracefully (e.g. spaces, dashes, +62 vs 0)
   const getCustomerKey = (name: string, phone: string) => {
-    const normName = name.trim().toLowerCase();
-    const normPhone = phone.trim().replace(/[\s\-\(\)\+]/g, '').replace(/^62/, '0');
+    const normName = (name || '').trim().toLowerCase();
+    const normPhone = (phone || '').trim().replace(/[\s\-\(\)\+]/g, '').replace(/^62/, '0');
     return `${normName}_${normPhone}`;
   };
 
@@ -178,9 +178,9 @@ export default function CustomerRoster({
   const filteredCustomers = allMergedCustomers.filter((c) => {
     const normSearch = searchTerm.toLowerCase();
     const cleanSearchDigits = searchTerm.replace(/[\s\-\(\)\+]/g, '');
-    const cleanPhoneDigits = c.phone.replace(/[\s\-\(\)\+]/g, '');
-    return c.name.toLowerCase().includes(normSearch) || 
-           c.phone.includes(searchTerm) ||
+    const cleanPhoneDigits = (c.phone || '').replace(/[\s\-\(\)\+]/g, '');
+    return (c.name || '').toLowerCase().includes(normSearch) || 
+           (c.phone || '').includes(searchTerm) ||
            (cleanSearchDigits.length > 0 && cleanPhoneDigits.includes(cleanSearchDigits));
   });
 

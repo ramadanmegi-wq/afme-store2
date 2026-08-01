@@ -63,7 +63,7 @@ export default function IPhoneStock({
 
   // Filtered Products
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = (p.model || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (p.imei && p.imei.includes(searchTerm)) ||
                           (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (p.purchaserName && p.purchaserName.toLowerCase().includes(searchTerm.toLowerCase()));

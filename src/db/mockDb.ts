@@ -425,7 +425,7 @@ export function getAccounts(): AppAccount[] {
 
 export function saveAccount(acc: AppAccount): void {
   const accounts = getAccounts();
-  const index = accounts.findIndex((a) => a.id === acc.id || a.username.toLowerCase() === acc.username.toLowerCase());
+  const index = accounts.findIndex((a) => a.id === acc.id || (a.username || '').toLowerCase() === (acc.username || '').toLowerCase());
   if (index > -1) {
     accounts[index] = acc;
   } else {

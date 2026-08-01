@@ -252,7 +252,7 @@ export default function LaporanTransaksi({
       if (p.type === 'aksesoris' && (p.stock || 0) <= 0) return false;
       if (searchProductQuery.trim() !== '') {
         const q = searchProductQuery.toLowerCase();
-        return p.model.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.imei && p.imei.includes(q));
+        return (p.model || '').toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.imei && p.imei.includes(q));
       }
       return true;
     }).slice(0, 5);
@@ -392,10 +392,10 @@ export default function LaporanTransaksi({
       // Search query filter
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
-        const matchCustomer = item.customerName.toLowerCase().includes(query);
-        const matchSummary = item.summaryText.toLowerCase().includes(query);
-        const matchId = item.id.toLowerCase().includes(query);
-        const matchCashier = item.cashierName.toLowerCase().includes(query);
+        const matchCustomer = (item.customerName || '').toLowerCase().includes(query);
+        const matchSummary = (item.summaryText || '').toLowerCase().includes(query);
+        const matchId = (item.id || '').toLowerCase().includes(query);
+        const matchCashier = (item.cashierName || '').toLowerCase().includes(query);
         if (!matchCustomer && !matchSummary && !matchId && !matchCashier) return false;
       }
 

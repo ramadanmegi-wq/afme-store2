@@ -585,7 +585,7 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         biaya_perbaikan: prod.repairCost || 0,
         harga_jual: prod.sellingPrice,
         stok: prod.status === 'available' ? 1 : 0,
-        kondisi: prod.model.toLowerCase().includes('baru') ? 'Baru' : 'Second',
+        kondisi: (prod.model || '').toLowerCase().includes('baru') ? 'Baru' : 'Second',
         purchaser_name: prod.purchaserName || null
       };
 
@@ -599,7 +599,7 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         harga_modal: prod.buyPrice + (prod.repairCost || 0),
         harga_jual: prod.sellingPrice,
         stok: prod.status === 'available' ? 1 : 0,
-        kondisi: prod.model.toLowerCase().includes('baru') ? 'Baru' : 'Second'
+        kondisi: (prod.model || '').toLowerCase().includes('baru') ? 'Baru' : 'Second'
       };
 
       try {
@@ -898,7 +898,7 @@ export async function getTransactionsFromSupabase(): Promise<Transaction[]> {
         .map(it => ({
           productId: it.product_id || '',
           model: it.nama_barang,
-          type: (it.nama_barang.toLowerCase().includes('iphone') ? 'iphone' : 'aksesoris') as 'iphone' | 'aksesoris',
+          type: ((it.nama_barang || '').toLowerCase().includes('iphone') ? 'iphone' : 'aksesoris') as 'iphone' | 'aksesoris',
           sellingPrice: Number(it.harga),
           buyPrice: Number(it.harga * 0.7), // Estimasi modal bila tidak terekam
           repairCost: 0,

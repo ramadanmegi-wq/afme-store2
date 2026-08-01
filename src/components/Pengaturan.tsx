@@ -156,7 +156,7 @@ export default function Pengaturan({
 
     // Check duplicate username if adding new
     if (!isEditing) {
-      const exists = accounts.some(a => a.username.toLowerCase() === username.trim().toLowerCase());
+      const exists = accounts.some(a => (a.username || '').toLowerCase() === username.trim().toLowerCase());
       if (exists) {
         setStatusMsg('Username sudah terpakai!');
         setStatusType('error');
@@ -183,7 +183,7 @@ export default function Pengaturan({
       setStatusMsg(isEditing ? 'Akun berhasil diperbarui!' : 'Akun baru berhasil didaftarkan!');
       setStatusType('success');
 
-      if (isEditing && onUserUpdated && accountData.username.toLowerCase() === currentUserUsername.toLowerCase()) {
+      if (isEditing && onUserUpdated && currentUserUsername && (accountData.username || '').toLowerCase() === (currentUserUsername || '').toLowerCase()) {
         onUserUpdated(accountData);
       }
       
@@ -331,7 +331,7 @@ export default function Pengaturan({
                 </div>
               ) : (
                 accounts.map(acc => {
-                  const isCurrent = acc.username.toLowerCase() === currentUserUsername.toLowerCase();
+                  const isCurrent = currentUserUsername ? (acc.username || '').toLowerCase() === currentUserUsername.toLowerCase() : false;
                   return (
                     <div key={acc.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
                       <div className="flex items-start gap-3">

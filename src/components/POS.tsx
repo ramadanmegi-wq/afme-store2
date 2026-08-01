@@ -51,8 +51,8 @@ export default function POS({ products, activeRole, onCheckout, cashierName, cus
   const matchedCustomers = useMemo(() => {
     if (!customerName.trim()) return [];
     return customers.filter((c) => 
-      c.name.toLowerCase().includes(customerName.toLowerCase()) ||
-      c.phone.includes(customerName)
+      (c.name || '').toLowerCase().includes(customerName.toLowerCase()) ||
+      (c.phone || '').includes(customerName)
     );
   }, [customerName, customers]);
   
@@ -277,7 +277,7 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
       if (p.status !== 'available') return false;
       if (p.type === 'aksesoris' && (p.stock !== undefined && p.stock <= 0)) return false;
       
-      const matchesSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = (p.model || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (p.imei && p.imei.includes(searchTerm)) ||
                             (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesType = selectedType === 'all' || p.type === selectedType;

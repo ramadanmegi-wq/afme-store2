@@ -51,8 +51,8 @@ export default function ServiceHP({
   const matchedCustomers = useMemo(() => {
     if (!customerName.trim()) return [];
     return customers.filter((c) => 
-      c.name.toLowerCase().includes(customerName.toLowerCase()) ||
-      c.phone.includes(customerName)
+      (c.name || '').toLowerCase().includes(customerName.toLowerCase()) ||
+      (c.phone || '').includes(customerName)
     );
   }, [customerName, customers]);
   const [devModel, setDevModel] = useState('');
@@ -74,9 +74,9 @@ export default function ServiceHP({
 
   // Filtered Services
   const filteredServices = services.filter((s) => {
-    const matchesSearch = s.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.devModel.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.customerPhone.includes(searchTerm);
+    const matchesSearch = (s.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (s.devModel || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (s.customerPhone || '').includes(searchTerm);
     const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
     return matchesSearch && matchesStatus;
   });

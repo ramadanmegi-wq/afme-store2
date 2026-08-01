@@ -46,8 +46,8 @@ export default function SparepartsInventory({
 
   // Filtered spareparts
   const filteredSpareparts = spareparts.filter(sp => {
-    return sp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           sp.compatibleModels.toLowerCase().includes(searchTerm.toLowerCase());
+    return (sp.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (sp.compatibleModels || '').toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   // Action: Add new

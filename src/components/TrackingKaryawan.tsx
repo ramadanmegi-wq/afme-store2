@@ -135,9 +135,11 @@ export default function TrackingKaryawan({
   };
 
   // Helper date matching
-  const isDateInFilter = (dateString: string) => {
+  const isDateInFilter = (dateString?: string) => {
     if (dateFilter === 'all') return true;
+    if (!dateString) return false;
     const d = new Date(dateString);
+    if (isNaN(d.getTime())) return false;
     const now = new Date();
 
     if (dateFilter === 'today') {
@@ -190,14 +192,25 @@ export default function TrackingKaryawan({
       
       let trxProfit = 0;
       let hpUnits = 0;
-      t.items.forEach(item => {
-        trxProfit += (item.price - item.buyPrice) * item.qty;
-        if (item.productType === 'iphone') {
-          hpUnits += item.qty;
-        }
-      });
-      stats[matchedStaff].salesProfit += trxProfit;
-      stats[matchedStaff].hpUnitsSold += hpUnits;
+      if (t.items && t.items.length > 0) {
+        t.items.forEach(item => {
+          const selling = item.sellingPrice ?? (item as any).price ?? 0;
+          const buy = item.buyPrice ?? 0;
+          const repair = item.repairCost ?? 0;
+          const qty = item.quantity ?? (item as any).qty ?? 1;
+          const pType = item.type ?? (item as any).productType;
+
+          trxProfit += (selling - (buy + repair)) * qty;
+          if (pType === 'iphone') {
+            hpUnits += qty;
+          }
+        });
+      }
+      if ((!trxProfit || isNaN(trxProfit)) && typeof t.totalProfit === 'number') {
+        trxProfit = t.totalProfit;
+      }
+      stats[matchedStaff].salesProfit += isNaN(trxProfit) ? 0 : trxProfit;
+      stats[matchedStaff].hpUnitsSold += isNaN(hpUnits) ? 0 : hpUnits;
     });
 
     // Process products (Stock purchases)
@@ -326,7 +339,7 @@ export default function TrackingKaryawan({
     return filteredTransactions.filter(t => {
       const matched = findTrackedStaff(t.cashierName);
       const matchStaff = selectedStaffFilter === 'all' || matched === selectedStaffFilter || (t.cashierName && t.cashierName.includes(selectedStaffFilter));
-      const matchSearch = t.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchSearch = (t.invoiceNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (t.customerName && t.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (t.cashierName && t.cashierName.toLowerCase().includes(searchTerm.toLowerCase()));
       return matchStaff && matchSearch;
@@ -338,7 +351,7 @@ export default function TrackingKaryawan({
     return products.filter(p => {
       if (!p.purchaserName) return false;
       const matchStaff = selectedStaffFilter === 'all' || p.purchaserName === selectedStaffFilter;
-      const matchSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchSearch = (p.model || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (p.imei && p.imei.includes(searchTerm)) ||
                           (p.purchaserName && p.purchaserName.toLowerCase().includes(searchTerm.toLowerCase()));
       return matchStaff && matchSearch;

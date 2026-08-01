@@ -63,7 +63,7 @@ export default function PinLockModal({ onUnlock, appLogo = '/logo.png' }: PinLoc
 
     // Lookup matching account
     const matchedAccount = accounts.find(
-      a => a.username.toLowerCase() === selectedUsername.trim().toLowerCase()
+      a => (a.username || '').toLowerCase() === selectedUsername.trim().toLowerCase()
     );
     
     if (!matchedAccount) {
