@@ -21,7 +21,8 @@ import {
   ArrowRight,
   Scale,
   HelpCircle,
-  CheckCircle
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   ResponsiveContainer,
@@ -61,7 +62,7 @@ export default function LaporanKeuangan({
   onUpdateTransaction
 }: LaporanKeuanganProps) {
   // Filters State
-  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'year' | 'custom'>('month');
+  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'year' | 'all' | 'custom'>('all');
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   );
@@ -91,6 +92,10 @@ export default function LaporanKeuangan({
 
   // Print Mode State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+
+  // Tab Utama Laporan Keuangan Simple
+  const [activeMainTab, setActiveMainTab] = useState<'laba_rugi' | 'buku_kas' | 'opex' | 'audit'>('laba_rugi');
 
   // Tab Buku Kas & Neraca State
   const [activeCashTab, setActiveCashTab] = useState<'neraca' | 'arus_kas' | 'panduan'>('neraca');
@@ -103,6 +108,7 @@ export default function LaporanKeuangan({
   const [editedItems, setEditedItems] = useState<TransactionItem[]>([]);
 
   const handleStartEditTrx = (tx: Transaction) => {
+    if (activeRole !== 'owner' && activeRole !== 'admin') return;
     setEditingTransaction(tx);
     setEditedCustomerName(tx.customerName || 'Pelanggan Umum');
     setEditedCustomerPhone(tx.customerPhone || '08123456789');
@@ -128,7 +134,7 @@ export default function LaporanKeuangan({
   };
 
   const handleSaveTrxEdit = () => {
-    if (!editingTransaction) return;
+    if (!editingTransaction || (activeRole !== 'owner' && activeRole !== 'admin')) return;
 
     // Recalculate values
     let cartSubtotal = 0;
@@ -141,11 +147,28 @@ export default function LaporanKeuangan({
 
     const finalTotal = Math.max(0, cartSubtotal - (editingTransaction.tradeIn ? editingTransaction.tradeIn.buyPrice : 0));
 
+    let finalDate = editingTransaction.date;
+    if (editedDate) {
+      const origDatePart = editingTransaction.date ? editingTransaction.date.split('T')[0] : '';
+      if (editedDate === origDatePart) {
+        finalDate = editingTransaction.date;
+      } else {
+        const origTimePart = editingTransaction.date && editingTransaction.date.includes('T')
+          ? 'T' + editingTransaction.date.split('T')[1]
+          : 'T' + new Date().toISOString().split('T')[1];
+        try {
+          finalDate = new Date(editedDate + origTimePart).toISOString();
+        } catch {
+          finalDate = new Date(editedDate).toISOString();
+        }
+      }
+    }
+
     const updatedTrx: Transaction = {
       ...editingTransaction,
       customerName: editedCustomerName.trim() || 'Pelanggan Umum',
       customerPhone: editedCustomerPhone.trim() || '08123456789',
-      date: editedDate ? new Date(editedDate).toISOString() : editingTransaction.date,
+      date: finalDate,
       items: editedItems,
       totalAmount: finalTotal,
       totalProfit: profit
@@ -169,20 +192,29 @@ export default function LaporanKeuangan({
   // Filter Data based on selected date ranges
   const filteredData = useMemo(() => {
     const now = new Date();
-    let start = new Date();
-    let end = new Date();
+    let start = new Date(0);
+    let end = new Date('2099-12-31T23:59:59.999Z');
 
     if (period === 'today') {
+      start = new Date();
       start.setHours(0, 0, 0, 0);
+      end = new Date();
       end.setHours(23, 59, 59, 999);
     } else if (period === 'week') {
+      start = new Date();
       start.setDate(now.getDate() - 7);
       start.setHours(0, 0, 0, 0);
+      end = new Date();
+      end.setHours(23, 59, 59, 999);
     } else if (period === 'month') {
-      // Start of current month
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (period === 'year') {
-      start = new Date(now.getFullYear(), 0, 1);
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (period === 'all') {
+      start = new Date(0);
+      end = new Date('2099-12-31T23:59:59.999Z');
     } else if (period === 'custom') {
       start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -191,16 +223,15 @@ export default function LaporanKeuangan({
     }
 
     const checkDate = (dateStr: string) => {
+      if (!dateStr) return true;
       const d = new Date(dateStr);
-      if (period === 'today' || period === 'custom') {
-        return d >= start && d <= end;
-      }
-      return d >= start && d <= now;
+      if (isNaN(d.getTime())) return true;
+      return d >= start && d <= end;
     };
 
-    const filterTransactions = transactions.filter(t => checkDate(t.date));
-    const filterServices = services.filter(s => checkDate(s.date));
-    const filterExpenses = expenses.filter(e => checkDate(e.date));
+    const filterTransactions = period === 'all' ? transactions : transactions.filter(t => checkDate(t.date));
+    const filterServices = period === 'all' ? services : services.filter(s => checkDate(s.date));
+    const filterExpenses = period === 'all' ? expenses : expenses.filter(e => checkDate(e.date));
 
     return {
       transactions: filterTransactions,
@@ -213,8 +244,10 @@ export default function LaporanKeuangan({
           : period === 'week' 
             ? '7 Hari Terakhir' 
             : period === 'month' 
-              ? 'Bulan Ini (Mulai Tanggal 1)' 
-              : 'Tahun Ini'
+              ? 'Bulan Ini' 
+              : period === 'year'
+                ? 'Tahun Ini'
+                : 'Semua Periode (Lifetime)'
     };
   }, [period, startDate, endDate, transactions, services, expenses]);
 
@@ -269,54 +302,60 @@ export default function LaporanKeuangan({
 
     // 7. ARUS KAS & PERSENTASE INTERAKTIF (PERHITUNGAN KAS & NILAI STOK)
     
-    // a) Nilai total stok yang tersedia (Asset Persediaan Aktif HP & Aksesoris)
-    const totalSisaPersediaanModal = products.reduce((sum, p) => {
-      if (p.status === 'available') {
-        if (p.type === 'iphone') {
-          return sum + p.buyPrice + (p.repairCost || 0);
-        } else {
-          return sum + (p.buyPrice * (p.stock || 0));
-        }
+    // a) Nilai total stok HP yang tersedia (Asset Persediaan Aktif HP)
+    const totalSisaHpModal = products.reduce((sum, p) => {
+      if (p.status === 'available' && p.type === 'iphone') {
+        return sum + p.buyPrice + (p.repairCost || 0);
       }
       return sum;
     }, 0);
 
-    // b) Nilai total stok sparepart yang tersedia (Asset Persediaan Suku Cadang)
-    const totalSisaSparepartsModal = spareparts.reduce((sum, sp) => sum + (sp.buyPrice * sp.stock), 0);
-
-    // c) Total modal belanja seluruh stok HP & aksesoris yang pernah didaftarkan
-    const totalBeliIPhoneAvailableAndSold = products.reduce((sum, p) => {
-      if (p.type === 'iphone') {
-        return sum + p.buyPrice + (p.repairCost || 0);
-      } else {
+    // b) Nilai total stok Aksesoris yang tersedia (Asset Persediaan Aktif Aksesoris)
+    const totalSisaAksesorisModal = products.reduce((sum, p) => {
+      if (p.status === 'available' && p.type === 'aksesoris') {
         return sum + (p.buyPrice * (p.stock || 0));
       }
+      return sum;
     }, 0);
 
-    let totalBeliAksesorisSold = 0;
+    const totalSisaPersediaanModal = totalSisaHpModal + totalSisaAksesorisModal;
+
+    // c) Nilai total stok sparepart yang tersedia (Asset Persediaan Suku Cadang)
+    const totalSisaSparepartsModal = spareparts.reduce((sum, sp) => sum + (sp.buyPrice * sp.stock), 0);
+
+    // c) Hitung HPP Lifetime POS dari seluruh transaksi terdaftar
+    let lifetimeHppPos = 0;
     transactions.forEach(tx => {
       tx.items.forEach(it => {
-        if (it.type === 'aksesoris') {
-          const matchedProduct = products.find(p => p.id === it.productId);
-          const actualBuyPrice = matchedProduct ? matchedProduct.buyPrice : it.buyPrice;
-          totalBeliAksesorisSold += actualBuyPrice * it.quantity;
-        }
+        const matchedProduct = products.find(p => p.id === it.productId);
+        const actualBuyPrice = matchedProduct ? matchedProduct.buyPrice : it.buyPrice;
+        const actualRepairCost = matchedProduct ? matchedProduct.repairCost : (it.repairCost || 0);
+        lifetimeHppPos += (actualBuyPrice + actualRepairCost) * it.quantity;
       });
     });
 
-    const totalKasKeluarUntukStok = totalBeliIPhoneAvailableAndSold + totalBeliAksesorisSold;
-
-    // d) Total modal belanja spareparts/suku cadang (yang masih ada di stok + yang sudah terpakai)
+    // d) Total modal belanja spareparts/suku cadang (yang sudah terpakai di service selesai)
     const lifetimeSparepartService = services.filter(s => s.status === 'selesai').reduce((sum, s) => sum + s.capitalCost, 0);
+
+    // e) Total kas keluar untuk belanja seluruh stok HP & aksesoris (Persediaan Aktif + Terjual)
+    const totalKasKeluarUntukStok = totalSisaPersediaanModal + lifetimeHppPos;
+
+    // f) Total kas keluar untuk belanja suku cadang (Persediaan Aktif + Terpakai)
     const totalKasKeluarBelanjaSparepart = totalSisaSparepartsModal + lifetimeSparepartService;
 
-    // Hitung sisa kas berjalan (Cash on Hand) secara kumulatif toko (LIFETIME CASH RECONCILIATION)
+    // g) Lifetime Income & OPEX
     const lifetimePosRevenue = transactions.reduce((sum, tx) => sum + tx.totalAmount, 0);
     const lifetimeServiceRevenue = services.filter(s => s.status === 'selesai').reduce((sum, s) => sum + s.cost, 0);
     const lifetimeOperationalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
 
+    // h) Lifetime Profit & Cash Balance Reconciliation
+    const cumulativeNetProfit = (lifetimePosRevenue + lifetimeServiceRevenue) - (lifetimeHppPos + lifetimeSparepartService) - lifetimeOperationalExpense;
     const saldoKasKumulatif = modalAwal + lifetimePosRevenue + lifetimeServiceRevenue - totalKasKeluarUntukStok - totalKasKeluarBelanjaSparepart - lifetimeOperationalExpense;
-    const cumulativeNetProfit = lifetimePosRevenue + lifetimeServiceRevenue - (totalKasKeluarUntukStok - totalSisaPersediaanModal) - lifetimeSparepartService - lifetimeOperationalExpense;
+
+    // i) Double-Entry Balance Audit Reconciliation
+    const aktivaTotal = saldoKasKumulatif + totalSisaPersediaanModal + totalSisaSparepartsModal;
+    const pasivaTotal = modalAwal + cumulativeNetProfit;
+    const selisihRekonsiliasi = aktivaTotal - pasivaTotal;
 
     return {
       posRevenue,
@@ -335,6 +374,8 @@ export default function LaporanKeuangan({
       txCount: fTx.length,
       // Integrated Cash fields
       modalAwal,
+      totalSisaHpModal,
+      totalSisaAksesorisModal,
       totalSisaPersediaanModal,
       totalSisaSparepartsModal,
       totalKasKeluarUntukStok,
@@ -344,7 +385,10 @@ export default function LaporanKeuangan({
       lifetimeSparepartService,
       lifetimeOperationalExpense,
       saldoKasKumulatif,
-      cumulativeNetProfit
+      cumulativeNetProfit,
+      aktivaTotal,
+      pasivaTotal,
+      selisihRekonsiliasi
     };
   }, [filteredData, products, transactions, services, expenses, spareparts, modalAwal]);
 
@@ -488,7 +532,13 @@ export default function LaporanKeuangan({
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* Period selector */}
-          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-505">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs font-semibold text-slate-500">
+            <button
+              onClick={() => setPeriod('all')}
+              className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${period === 'all' ? 'bg-white text-indigo-700 font-extrabold shadow-xs' : 'hover:text-slate-800'}`}
+            >
+              Semua (Lifetime)
+            </button>
             <button
               onClick={() => setPeriod('today')}
               className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${period === 'today' ? 'bg-white text-indigo-700 font-extrabold shadow-xs' : 'hover:text-slate-800'}`}
@@ -520,6 +570,13 @@ export default function LaporanKeuangan({
               Custom
             </button>
           </div>
+
+          <button
+            onClick={() => setIsAuditModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+          >
+            <CheckCircle size={14} /> Audit & Verifikasi
+          </button>
 
           <button
             onClick={() => setIsPrintModalOpen(true)}
@@ -556,786 +613,699 @@ export default function LaporanKeuangan({
         </div>
       )}
 
-      {/* SECTION: INTEGRASI BUKU KAS & MODAL (LIFETIME ACCOUNTING) */}
-      <div className="bg-linear-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 rounded-3xl text-white shadow-lg border border-indigo-900/40">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 border-b border-indigo-900/30 pb-4">
-          <div>
-            <h3 className="font-extrabold text-base flex items-center gap-2 text-indigo-150">
-              <Wallet size={18} className="text-emerald-400" /> Buku Kas Utama, Permodalan & Neraca Toko
-            </h3>
-            <p className="text-slate-300 text-xs mt-0.5 font-sans leading-relaxed">
-              Pusat keuangan yang menghubungkan modal usaha, sisa uang kas riil di laci, nilai aset barang etalase, dan keuntungan murni Anda.
-            </p>
-          </div>
-          
-          {/* TAB BUTTONS */}
-          <div className="flex flex-wrap items-center bg-slate-950/80 p-1 rounded-xl border border-indigo-900/40 gap-1">
-            <button
-              onClick={() => setActiveCashTab('neraca')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeCashTab === 'neraca' 
-                  ? 'bg-indigo-600 text-white shadow-xs' 
-                  : 'text-slate-400 hover:text-white hover:bg-indigo-950/40'
-              }`}
-            >
-              <Scale size={13} />
-              1. Neraca & Persediaan
-            </button>
-            <button
-              onClick={() => setActiveCashTab('arus_kas')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeCashTab === 'arus_kas' 
-                  ? 'bg-indigo-600 text-white shadow-xs' 
-                  : 'text-slate-400 hover:text-white hover:bg-indigo-950/40'
-              }`}
-            >
-              <Calculator size={13} />
-              2. Aliran Kas Masuk-Keluar
-            </button>
-            <button
-              onClick={() => setActiveCashTab('panduan')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                activeCashTab === 'panduan' 
-                  ? 'bg-indigo-600 text-white shadow-xs' 
-                  : 'text-slate-400 hover:text-white hover:bg-indigo-950/40'
-              }`}
-            >
-              <HelpCircle size={13} />
-              3. Panduan Pemula
-            </button>
-          </div>
+      {/* Main Mode Navigation Bar */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/85 shadow-xs flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setActiveMainTab('laba_rugi')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === 'laba_rugi'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Briefcase size={15} />
+            1. Ringkasan Laba Rugi
+          </button>
+          <button
+            onClick={() => setActiveMainTab('buku_kas')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === 'buku_kas'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Wallet size={15} />
+            2. Buku Kas & Neraca Toko
+          </button>
+          <button
+            onClick={() => setActiveMainTab('opex')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === 'opex'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Plus size={15} />
+            3. Input OPEX & Bagi Hasil
+          </button>
+          <button
+            onClick={() => setActiveMainTab('audit')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+              activeMainTab === 'audit'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <CheckCircle size={15} />
+            4. Audit & Rekonsiliasi Visual
+          </button>
         </div>
 
-        {/* TAB CONTENT 1: NERACA & PERSEDIAAN */}
-        {activeCashTab === 'neraca' && (
-          <div className="space-y-6">
-            {/* Quick Summary Cards (3 Columns) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              {/* Card 1: Pengelolaan Permodalan */}
-              <div className="bg-slate-950/45 border border-indigo-900/30 rounded-2xl p-4.5 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">MODAL USAHA DISUKAI (EQUITY)</span>
-                  <button 
-                    onClick={() => {
-                      setTempModalInput(stats.modalAwal.toString());
-                      setIsEditModalOpen(!isEditModalOpen);
-                    }}
-                    className="text-indigo-300 hover:text-white text-[10px] font-bold flex items-center gap-1 bg-indigo-955/65 hover:bg-indigo-900/60 px-2 py-1 rounded-lg transition border border-indigo-900/30 cursor-pointer font-sans"
-                  >
-                    <Edit2 size={9} /> Atur Modal
-                  </button>
-                </div>
-
-                {isEditModalOpen ? (
-                  <div className="bg-slate-900 p-2.5 rounded-xl border border-indigo-500/30 space-y-2">
-                    <p className="text-[10px] text-slate-300 font-sans">Ubah modal awal disetor untuk operasional toko:</p>
-                    <div className="flex gap-2">
-                      <input 
-                        type="number"
-                        value={tempModalInput}
-                        onChange={(e) => setTempModalInput(e.target.value)}
-                        className="bg-slate-950 border border-slate-700 rounded-lg p-1 text-xs text-white w-full focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-mono"
-                        placeholder="e.g. 50000000"
-                      />
-                      <button 
-                        onClick={() => {
-                          const val = parseInt(tempModalInput);
-                          if (!isNaN(val) && val >= 0) {
-                            setModalAwal(val);
-                            localStorage.setItem('afme_modal_awal', val.toString());
-                            setIsEditModalOpen(false);
-                          }
-                        }}
-                        className="bg-indigo-605 hover:bg-indigo-705 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      >
-                        Simpan
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-xl font-bold text-slate-100 font-mono">{formatIDR(stats.modalAwal)}</p>
-                    <p className="text-[10px] text-slate-400 font-sans leading-relaxed">Uang milik owner yang disetor pertama kali untuk memulai operasional.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Card 2: Alokasi Modal Stok HP / Aksesoris (Asset Value) */}
-              <div className="bg-slate-950/45 border border-indigo-900/30 rounded-2xl p-4.5 space-y-3 flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">ASET FISIK (NILAI STOK DI RUKO)</span>
-                  <p className="text-xl font-bold text-white font-mono mt-0.5">{formatIDR(stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}</p>
-                </div>
-                <div className="text-[10px] text-slate-300 border-t border-indigo-950/50 pt-2 space-y-1 font-sans">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">🔥 Stok HP & Aksesoris:</span>
-                    <span className="font-bold text-slate-200 font-mono">{formatIDR(stats.totalSisaPersediaanModal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">🔧 Suku Cadang Service:</span>
-                    <span className="font-bold text-slate-200 font-mono">{formatIDR(stats.totalSisaSparepartsModal)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: Rekonsiliasi Kas On-Hand berjalan */}
-              <div className="bg-slate-950/45 border border-indigo-900/30 rounded-2xl p-4.5 space-y-3 flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block font-sans">KAS TUNAI (UANG RIIL DI LACI)</span>
-                  <p className={`text-xl font-bold font-mono mt-0.5 ${stats.saldoKasKumulatif >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                    {formatIDR(stats.saldoKasKumulatif)}
-                  </p>
-                </div>
-                <div className="text-[10px] text-slate-300 border-t border-indigo-950/50 pt-2 flex justify-between font-sans">
-                  <span className="text-slate-400">Status Likuiditas Kas:</span>
-                  <span className={`font-mono font-bold ${stats.saldoKasKumulatif >= stats.modalAwal ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {stats.saldoKasKumulatif >= stats.modalAwal ? 'KAS SURPLUS BERSIH' : 'BELANJA MODAL SEHAT'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* VISUAL NERACA: DOUBLE-SIDED T-ACCOUNT VIEW */}
-            <div className="bg-slate-950/60 p-5 rounded-2xl border border-indigo-900/40 space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-900/40 pb-3">
-                <div>
-                  <h4 className="text-xs font-bold text-indigo-200 uppercase tracking-widest flex items-center gap-1.5 font-sans">
-                    <Scale size={14} className="text-indigo-400" />
-                    Bagan Neraca Keuangan Toko (Balance Sheet Sederhana)
-                  </h4>
-                  <p className="text-[10px] text-slate-400 font-sans mt-0.5">Semua kepemilikan aset di ruko (Sisi Kiri) wajib bersumber dari modal awal atau hasil laba murni Anda (Sisi Kanan).</p>
-                </div>
-                
-                <div className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-xl text-[10px] font-extrabold font-mono tracking-wider">
-                  <CheckCircle size={10} className="text-emerald-400 animate-pulse" />
-                  KEDUA SISI SEIMBANG !
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
-                {/* Visual Separator Line for Desktop */}
-                <div className="hidden md:block absolute left-1/2 top-4 bottom-4 w-px bg-indigo-900/45"></div>
-
-                {/* SISI KIRI: AKTIVA (Kekayaan) */}
-                <div className="space-y-3.5">
-                  <div className="flex justify-between items-center bg-indigo-950/65 p-2 rounded-xl px-3 border border-indigo-900/30">
-                    <span className="text-xs font-extrabold text-indigo-200">SISI AKTIVA (Semua Harta / Milik Toko)</span>
-                    <span className="text-xs font-bold text-slate-400 font-sans">Stok HP + Kas + Suku Cadang</span>
-                  </div>
-
-                  <div className="space-y-2 text-xs sm:p-2">
-                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-indigo-950/30 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
-                        <span className="text-slate-300">Sisa Uang Kas Tunai (Drawer)</span>
-                      </div>
-                      <span className="font-semibold font-mono text-slate-100">{formatIDR(stats.saldoKasKumulatif)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-indigo-950/30 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-                        <span className="text-slate-300">Nilai Stok HP & Aksesoris Terpajang</span>
-                      </div>
-                      <span className="font-semibold font-mono text-slate-100">{formatIDR(stats.totalSisaPersediaanModal)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-indigo-950/30 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
-                        <span className="text-slate-300">Nilai Persediaan Suku Cadang Service</span>
-                      </div>
-                      <span className="font-semibold font-mono text-slate-100">{formatIDR(stats.totalSisaSparepartsModal)}</span>
-                    </div>
-
-                    {/* Blue Progress Bar showing Composition */}
-                    <div className="mt-4 pt-1">
-                      <div className="w-full bg-slate-900 rounded-full h-2.5 flex overflow-hidden border border-slate-800">
-                        <div 
-                          style={{ width: `${Math.max(5, Math.min(90, (stats.saldoKasKumulatif / (stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal || 1)) * 100))}%` }} 
-                          className="bg-emerald-500" 
-                          title="Uang Kas"
-                        />
-                        <div 
-                          style={{ width: `${Math.max(5, Math.min(90, (stats.totalSisaPersediaanModal / (stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal || 1)) * 100))}%` }} 
-                          className="bg-indigo-500" 
-                          title="Persediaan HP"
-                        />
-                        <div 
-                          style={{ width: `${Math.max(5, Math.min(90, (stats.totalSisaSparepartsModal / (stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal || 1)) * 100))}%` }} 
-                          className="bg-amber-500" 
-                          title="Suku Cadang"
-                        />
-                      </div>
-                      <div className="flex gap-3 justify-start text-[9px] text-slate-450 mt-2 font-sans">
-                        <span className="flex items-center gap-1 font-semibold"><span className="w-2 h-2 rounded-full bg-emerald-500 block"></span>Kas Riil</span>
-                        <span className="flex items-center gap-1 font-semibold"><span className="w-2 h-2 rounded-full bg-indigo-505 block"></span>Stok HP/Aksesoris</span>
-                        <span className="flex items-center gap-1 font-semibold"><span className="w-2 h-2 rounded-full bg-amber-500 block"></span>Suku Cadang</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center border-t border-indigo-900/40 pt-3 mt-4 text-xs font-bold text-emerald-400">
-                      <span>TOTAL KEKAYAAN (AKTIVA):</span>
-                      <span className="font-mono text-sm underline decoration-emerald-500/50 underline-offset-4 decoration-2">
-                        {formatIDR(stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SISI KANAN: PASIVA (Sumber Dana) */}
-                <div className="space-y-3.5">
-                  <div className="flex justify-between items-center bg-indigo-950/65 p-2 rounded-xl px-3 border border-indigo-900/30">
-                    <span className="text-xs font-extrabold text-indigo-200">SISI PASIVA (Sumber Dana Toko)</span>
-                    <span className="text-xs font-bold text-slate-400 font-sans">Modal Awal + Laba Cumulative</span>
-                  </div>
-
-                  <div className="space-y-2 text-xs sm:p-2 h-full flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between p-2 rounded-lg hover:bg-indigo-950/30 transition-colors">
-                        <div className="flex items-center gap-2">
-                          <span className="p-1 px-1.5 bg-indigo-900/50 rounded-md text-[10px] font-bold text-indigo-300">MODAL</span>
-                          <span className="text-slate-300">Setoran Modal Operasional Toko</span>
-                        </div>
-                        <span className="font-semibold font-mono text-slate-100">{formatIDR(stats.modalAwal)}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 rounded-lg hover:bg-indigo-950/30 transition-colors">
-                        <div className="flex items-center gap-2">
-                          <span className="p-1 px-1.5 bg-emerald-900/50 rounded-md text-[10px] font-bold text-emerald-300">PROFIT</span>
-                          <span className="text-slate-300">Akumulasi Keuntungan Bersih Toko</span>
-                        </div>
-                        <span className={`font-semibold font-mono ${stats.cumulativeNetProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {stats.cumulativeNetProfit >= 0 ? '+' : ''}{formatIDR(stats.cumulativeNetProfit)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
-                      <div className="bg-slate-900/50 p-2.5 rounded-xl border border-indigo-900/10 text-[10px] text-indigo-200 font-sans leading-relaxed">
-                        <strong className="text-white">Mengapa Angkanya Sama?</strong> Neraca Anda sehat karena total aset yang ada di ruko ({formatIDR(stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}) terbukti murni berasal dari modal Anda ({formatIDR(stats.modalAwal)}) ditambah laba murni ({formatIDR(stats.cumulativeNetProfit)}). Tidak ada dana siluman yang hilang!
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center border-t border-indigo-900/40 pt-3 mt-4 text-xs font-bold text-emerald-400">
-                      <span>TOTAL MODAL & ARUS (PASIVA):</span>
-                      <span className="font-mono text-sm underline decoration-emerald-500/50 underline-offset-4 decoration-2">
-                        {formatIDR(stats.modalAwal + stats.cumulativeNetProfit)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB CONTENT 2: ALIRAN KAS MASUK-KELUAR */}
-        {activeCashTab === 'arus_kas' && (
-          <div className="space-y-5">
-            <div className="bg-slate-950/50 p-5 rounded-2xl border border-indigo-900/30 space-y-4">
-              <div>
-                <h4 className="text-xs font-bold text-indigo-200 uppercase tracking-widest flex items-center gap-1.5 font-sans">
-                  <Calculator size={14} className="text-indigo-400" />
-                  Alur Rekonsiliasi Buku Kas Utama Toko
-                </h4>
-                <p className="text-[10px] text-slate-400 font-sans mt-0.5">Penjelasan kronologis bagaimana nominal laci kasir tunai saat ini terbentuk dari modal, transaksi jual penonton, jasa servis, pembelian persediaan HP, dan operasional.</p>
-              </div>
-
-              {/* Step Flow Ledger */}
-              <div className="space-y-3 font-sans max-w-3xl">
-                {/* Step 1 */}
-                <div className="flex items-start gap-4 p-3 hover:bg-slate-900/45 rounded-xl transition border border-transparent hover:border-indigo-900/20">
-                  <div className="bg-indigo-300/10 text-indigo-400 font-mono text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0 border border-indigo-500/10">1</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-205">Suntikan Modal Kas Pertama</p>
-                    <p className="text-[10px] text-slate-400">Uang tunai yang didepositkan untuk memulai operasional sewa, ketersediaan meja, dan laci kassa.</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs text-indigo-305 font-bold">+{formatIDR(stats.modalAwal)}</span>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className="flex items-start gap-4 p-3 hover:bg-slate-900/45 rounded-xl transition border border-transparent hover:border-indigo-900/20">
-                  <div className="bg-emerald-400/10 text-emerald-400 font-mono text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/10">2</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-205">Kas Masuk dari POS Penjualan HP & Aksesoris</p>
-                    <p className="text-[10px] text-slate-400">Penerimaan bruto total yang ditarik dari seluruh penjualan HP riil milik pelanggan di kasir.</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs text-emerald-400 font-bold">+{formatIDR(stats.lifetimePosRevenue)}</span>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="flex items-start gap-4 p-3 hover:bg-slate-900/45 rounded-xl transition border border-transparent hover:border-indigo-900/20">
-                  <div className="bg-emerald-400/10 text-emerald-400 font-mono text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/10">3</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-205">Kas Masuk dari Layanan Jasa Service HP</p>
-                    <p className="text-[10px] text-slate-400">Uang servis yang diserahkan pelanggan setelah perbaikan HP mereka dinyatakan selesai.</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs text-emerald-400 font-bold">+{formatIDR(stats.lifetimeServiceRevenue)}</span>
-                  </div>
-                </div>
-
-                {/* Step 4 */}
-                <div className="flex items-start gap-4 p-3 hover:bg-slate-900/45 rounded-xl transition border border-transparent hover:border-indigo-900/20">
-                  <div className="bg-rose-450/10 text-rose-400 font-mono text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0 border border-rose-500/10">4</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-205">Kas Keluar Belanja Pengadaan Barang HP & Aksesoris</p>
-                    <p className="text-[10px] text-slate-400">Pembayaran tunai yang Anda keluarkan untuk kulakan/supply stok dagangan di toko yang saat ini berstatus terdaftar (baik tersedia maupun terjual).</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs text-rose-400 font-bold">-{formatIDR(stats.totalKasKeluarUntukStok)}</span>
-                  </div>
-                </div>
-
-                {/* Step 5 */}
-                <div className="flex items-start gap-4 p-3 hover:bg-slate-900/45 rounded-xl transition border border-transparent hover:border-indigo-900/20">
-                  <div className="bg-rose-450/10 text-rose-400 font-mono text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0 border border-rose-500/10">5</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-205">Kas Keluar Belanja Persediaan Suku Cadang (Sparepart)</p>
-                    <p className="text-[10px] text-slate-400">Arus modal tunai untuk membeli IC, baterai, LCD, dan perlengkapan reparasi (stok di laci service + yang sudah dipasang).</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs text-rose-400 font-bold">-{formatIDR(stats.totalKasKeluarBelanjaSparepart)}</span>
-                  </div>
-                </div>
-
-                {/* Step 6 */}
-                <div className="flex items-start gap-4 p-3 hover:bg-slate-900/45 rounded-xl transition border border-transparent hover:border-indigo-900/20">
-                  <div className="bg-rose-450/10 text-rose-400 font-mono text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center shrink-0 border border-rose-500/10">6</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-205">Kas Keluar Pengeluaran Biaya Operasional (OPEX)</p>
-                    <p className="text-[10px] text-slate-400">Seluruh biaya penunjang ruko seperti Wifi internet, listrik PLN, sewa gedung, uang bensin, makan staff, maupun biaya dadakan.</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-xs text-rose-400 font-bold">-{formatIDR(stats.lifetimeOperationalExpense)}</span>
-                  </div>
-                </div>
-
-                {/* Final Total */}
-                <div className="flex items-center gap-4 p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/25 mt-6 justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1 px-2 bg-emerald-500/20 text-emerald-305 rounded-lg text-xs font-extrabold">TOTAL KAS</span>
-                    <p className="text-xs font-extrabold text-white">Sisa Saldo Kas Tunai Aktif Saat Ini (Cash on Hand)</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-sm underline font-black text-emerald-450">{formatIDR(stats.saldoKasKumulatif)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB CONTENT 3: PANDUAN KEUNGAN PEMULA */}
-        {activeCashTab === 'panduan' && (
-          <div className="space-y-4">
-            <div className="bg-slate-950/50 p-5 rounded-2xl border border-indigo-900/30 space-y-4">
-              <div>
-                <h4 className="text-xs font-bold text-indigo-200 uppercase tracking-widest flex items-center gap-1.5 font-sans">
-                  <HelpCircle size={14} className="text-indigo-400" />
-                  Kamus Keuangan & FAQ Pemula Toko HP
-                </h4>
-                <p className="text-[10px] text-slate-400 font-sans mt-0.5">Pemahaman awam agar Anda tidak bingung membedakan uang di laci dengan profit di atas kertas.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans mt-2">
-                {/* Q1 */}
-                <div className="bg-indigo-950/45 p-4 rounded-xl border border-indigo-900/20 space-y-2">
-                  <p className="font-bold text-slate-100 flex items-center gap-1.5 text-xs">
-                    <span className="text-emerald-450 font-mono font-extrabold text-sm">Q.</span>
-                    Kenapa Sisa Uang Kas berbeda dengan Laba Bersih?
-                  </p>
-                  <p className="text-slate-350 leading-relaxed text-[10px] pt-1">
-                    Laba bersih menghitung nilai HP/Aksesoris di etalase Anda sebagai bagian dari <strong className="text-emerald-400">Keuntungan yang Belum Dicairkan (Aset)</strong>. 
-                    <br/><br/>
-                    Sedangkan <strong className="text-indigo-305">Uang Kas</strong> murni melacak uang lembaran kertas fisik yang ada di toko. Ketika Anda berbelanja kulakan HP baru, Kas Anda berkurang, tapi Keuntungan tidak berkurang karena uang berubah wujud menjadi HP yang siap dijual kembali.
-                  </p>
-                </div>
-
-                {/* Q2 */}
-                <div className="bg-indigo-950/45 p-4 rounded-xl border border-indigo-900/20 space-y-2">
-                  <p className="font-bold text-slate-100 flex items-center gap-1.5 text-xs">
-                    <span className="text-emerald-450 font-mono font-extrabold text-sm">Q.</span>
-                    Apa maksud dari "Neraca Seimbang" ?
-                  </p>
-                  <p className="text-slate-350 leading-relaxed text-[10px] pt-1">
-                    Neraca seimbang adalah garansi bahwa Anda tidak punya uang siluman yang hilang di luar pembukuan. 
-                    <br/><br/>
-                    Keuangan sehat dibuktikan jika <strong className="text-indigo-205">Total Harta Aktif</strong> (lembaran uang kas + stok HP pajangan + spareparts service) jumlahnya sama persis dengan total <strong className="text-indigo-205">Modal Awal Anda</strong> ditambah <strong className="text-emerald-400">Keuntungan Toko</strong>. Jika ada beda 1 Rupiah pun, sistem akan mengoreksi secara matematis agar selalu sinkron.
-                  </p>
-                </div>
-
-                {/* Q3 */}
-                <div className="bg-indigo-950/45 p-4 rounded-xl border border-indigo-900/20 space-y-2">
-                  <p className="font-bold text-slate-100 flex items-center gap-1.5 text-xs">
-                    <span className="text-emerald-450 font-mono font-extrabold text-sm">Q.</span>
-                    Bagaimana cara melipatgandakan Kas Tunai?
-                  </p>
-                  <p className="text-slate-350 leading-relaxed text-[10px] pt-1">
-                    Ada 3 jurus emas:
-                    <br/><br/>
-                    1. <strong className="text-white">Likuidasi Stok Mengendap:</strong> Beri diskon pada HP second yang sudah terlalu lama nangkring di etalase agar cepat menjadi uang tunai kembali.
-                    <br/>
-                    2. <strong className="text-white">Genjot Jasa Servis:</strong> Jasa service memiliki margin laba paling tinggi & menghasilkan kas tunai instan karena tidak membutuhkan modal stok HP yang menyedot kas laci.
-                    <br/>
-                    3. <strong className="text-white">Kencangkan Sabuk OPEX:</strong> Tekan biaya listrik/kuota/pengeluaran ruko yang tidak penting.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <div className="text-[11px] font-bold text-slate-500 px-3 py-1 bg-slate-50 rounded-xl border border-slate-200/60 hidden sm:block">
+          Periode: <span className="text-indigo-600">{filteredData.rangeText}</span>
+        </div>
       </div>
 
-      {/* Summary Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Total Terjual (Pendapatan Kotor) */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-sans">1. Total Omset (Pendapatan)</span>
-            <span className="p-1.5 bg-indigo-50 text-indigo-705 rounded-lg border border-indigo-100"><ArrowUpRight size={14} /></span>
+      {/* ALWAYS VISIBLE 4 CORE METRIC CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 1. Omset (Pendapatan) */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-sans">1. Total Omset</span>
+              <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100"><ArrowUpRight size={14} /></span>
+            </div>
+            <p className="text-xl font-extrabold text-slate-900 font-mono">{formatIDR(stats.totalRevenue)}</p>
           </div>
-          <p className="text-lg font-extrabold text-slate-900 font-mono">{formatIDR(stats.totalRevenue)}</p>
-          <div className="space-y-1 text-[10px] text-slate-500 mt-2 border-t border-slate-100 pt-1.5 font-sans">
+          <div className="space-y-1 text-[10px] text-slate-500 mt-3 border-t border-slate-100 pt-2 font-sans">
             <div className="flex justify-between">
-              <span>HP/Aksesori POS:</span>
-              <span className="font-extrabold text-slate-700">{formatIDR(stats.posRevenue)}</span>
+              <span>HP & Aksesoris POS:</span>
+              <span className="font-extrabold text-slate-700 font-mono">{formatIDR(stats.posRevenue)}</span>
             </div>
             <div className="flex justify-between">
               <span>Jasa Service HP:</span>
-              <span className="font-extrabold text-slate-700">{formatIDR(stats.serviceRevenue)}</span>
+              <span className="font-extrabold text-slate-700 font-mono">{formatIDR(stats.serviceRevenue)}</span>
             </div>
           </div>
         </div>
 
-        {/* Total COGS / HPP */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-sans">2. Modal Barang Terjual (HPP)</span>
-            <span className="p-1.5 bg-amber-50 text-amber-700 rounded-lg border border-amber-100"><TrendingDown size={14} /></span>
+        {/* 2. Modal HPP Terjual */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-sans">2. Modal Terjual (HPP)</span>
+              <span className="p-1.5 bg-amber-50 text-amber-600 rounded-xl border border-amber-100"><TrendingDown size={14} /></span>
+            </div>
+            <p className="text-xl font-extrabold text-slate-900 font-mono">{formatIDR(stats.totalHPP)}</p>
           </div>
-          <p className="text-lg font-extrabold text-slate-900 font-mono">{formatIDR(stats.totalHPP)}</p>
-          <div className="space-y-1 text-[10px] text-slate-500 mt-2 border-t border-slate-100 pt-1.5 font-sans">
+          <div className="space-y-1 text-[10px] text-slate-500 mt-3 border-t border-slate-100 pt-2 font-sans">
             <div className="flex justify-between">
-              <span>HPP HP Terjual:</span>
-              <span className="font-extrabold text-slate-700">{formatIDR(stats.hpPurchasingCost + stats.initialRepairsCost)}</span>
+              <span>HPP Unit HP Terjual:</span>
+              <span className="font-extrabold text-slate-700 font-mono">{formatIDR(stats.hpPurchasingCost + stats.initialRepairsCost)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Spareparts Servis:</span>
-              <span className="font-extrabold text-slate-700">{formatIDR(stats.modalSparepartService)}</span>
+              <span>Sparepart Servis:</span>
+              <span className="font-extrabold text-slate-700 font-mono">{formatIDR(stats.modalSparepartService)}</span>
             </div>
           </div>
         </div>
 
-        {/* Operational & Extra costs */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-sans">3. Biaya Operasional (OPEX)</span>
-            <span className="p-1.5 bg-rose-50 text-rose-700 rounded-lg border border-rose-100" title="Listrik, Wifi, Sewa Ruko, Gaji, dll.">
-              <Plus size={14} />
-            </span>
+        {/* 3. Operational Expense (OPEX) */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-sans">3. Operasional (OPEX)</span>
+              <span className="p-1.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-100"><Plus size={14} /></span>
+            </div>
+            <p className="text-xl font-extrabold text-slate-900 font-mono">{formatIDR(stats.totalOperationalExpense)}</p>
           </div>
-          <p className="text-lg font-extrabold text-slate-905 font-mono">{formatIDR(stats.totalOperationalExpense)}</p>
-          <div className="text-[10px] text-slate-500 mt-2 border-t border-slate-100 pt-1.5 leading-normal">
-            Mencakup <strong className="text-slate-800">{filteredData.expenses.length} item</strong> biaya penunjang ruko seperti wifi, listrik, sewa tempat, atau gaji karyawan.
+          <div className="text-[10px] text-slate-500 mt-3 border-t border-slate-100 pt-2 leading-relaxed">
+            Mencakup <strong className="text-slate-800">{filteredData.expenses.length} item</strong> pengeluaran wifi, listrik, sewa ruko, atau gaji staff.
           </div>
         </div>
 
-        {/* Laba Bersih Akhir */}
-        <div className="bg-indigo-50 border border-indigo-200 p-5 rounded-3xl shadow-xs text-indigo-900">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-widest font-sans">4. Keuntungan Bersih</span>
-            <span className="p-1.5 bg-white text-indigo-700 border border-indigo-150 rounded-lg"><DollarSign size={14} /></span>
+        {/* 4. Keuntungan Bersih (Net Profit) */}
+        <div className="bg-gradient-to-br from-indigo-50 via-indigo-50/80 to-emerald-50/50 border border-indigo-200/80 p-5 rounded-3xl shadow-xs text-indigo-950 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block font-sans">4. Keuntungan Bersih</span>
+                <span className="text-[9px] font-semibold text-indigo-500 font-sans">({filteredData.rangeText})</span>
+              </div>
+              <span className="p-1.5 bg-white text-indigo-700 border border-indigo-150 rounded-xl shadow-xs"><DollarSign size={14} /></span>
+            </div>
+            <p className={`text-xl font-black font-mono ${stats.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatIDR(stats.netProfit)}
+            </p>
           </div>
-          <p className={`text-lg font-black font-mono ${stats.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-            {formatIDR(stats.netProfit)}
-          </p>
-          <div className="text-[10px] text-indigo-800 mt-2 border-t border-indigo-150 pt-1.5 leading-normal">
-            Hasil bersih murni dari hasil pengurangan Omset dengan seluruh HPP & OPEX.
+          <div className="text-[10px] text-indigo-900 mt-3 border-t border-indigo-150/60 pt-2 leading-tight flex justify-between items-center">
+            <span>Margin Profit: <strong className="font-mono text-emerald-700 font-extrabold">{stats.totalRevenue > 0 ? Math.round((stats.netProfit / stats.totalRevenue) * 100) : 0}%</strong></span>
+            <button
+              onClick={() => setIsAuditModalOpen(true)}
+              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1 cursor-pointer"
+            >
+              <CheckCircle size={11} /> Cek Math
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Visual Analytics Grid with Custom SVG Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Laba Rugi Breakdown (Left 2 cols) */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/85 p-6 space-y-6 shadow-sm">
-          <div>
-            <h3 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wide font-sans">
-              📊 Visualisasi Arus Laba Rugi & Komparasi
-            </h3>
-            <p className="text-slate-500 text-[11px] mt-1">Analisis proporsal omset penjualan, beban pokok, operasional, profit, serta perkembangan bulanan.</p>
+      {/* TAB CONTENT 2: BUKU KAS & NERACA TOKO */}
+      {activeMainTab === 'buku_kas' && (
+        <div className="space-y-6">
+          {/* Top 5 Cash & Asset Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {/* Kas Tunai di Laci */}
+            <div className="bg-white p-4.5 rounded-3xl border border-slate-200/85 shadow-xs space-y-2">
+              <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block font-sans">KAS TUNAI (LACI)</span>
+              <p className={`text-lg font-extrabold font-mono ${stats.saldoKasKumulatif >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {formatIDR(stats.saldoKasKumulatif)}
+              </p>
+              <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                Uang fisik di laci kasir aktif
+              </p>
+            </div>
+
+            {/* Nilai Stok HP */}
+            <div className="bg-white p-4.5 rounded-3xl border border-slate-200/85 shadow-xs space-y-2">
+              <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block font-sans">ASET STOK HP</span>
+              <p className="text-lg font-extrabold font-mono text-slate-900">{formatIDR(stats.totalSisaHpModal)}</p>
+              <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                Aset fisik HP second &amp; baru ruko
+              </p>
+            </div>
+
+            {/* Nilai Stok Aksesoris */}
+            <div className="bg-white p-4.5 rounded-3xl border border-slate-200/85 shadow-xs space-y-2">
+              <span className="text-[10px] font-extrabold text-violet-700 uppercase tracking-wider block font-sans">ASET STOK AKSESORIS</span>
+              <p className="text-lg font-extrabold font-mono text-slate-900">{formatIDR(stats.totalSisaAksesorisModal)}</p>
+              <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                Aset charger, case &amp; aksesoris
+              </p>
+            </div>
+
+            {/* Nilai Stok Sparepart */}
+            <div className="bg-white p-4.5 rounded-3xl border border-slate-200/85 shadow-xs space-y-2">
+              <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider block font-sans">STOK SPAREPART</span>
+              <p className="text-lg font-extrabold font-mono text-slate-900">{formatIDR(stats.totalSisaSparepartsModal)}</p>
+              <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                Suku cadang servis HP ruko
+              </p>
+            </div>
+
+            {/* Modal Owner */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/85 shadow-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block font-sans">MODAL DISETOR OWNER</span>
+                <button
+                  onClick={() => {
+                    setTempModalInput(stats.modalAwal.toString());
+                    setIsEditModalOpen(!isEditModalOpen);
+                  }}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 cursor-pointer"
+                >
+                  Edit Modal
+                </button>
+              </div>
+
+              {isEditModalOpen ? (
+                <div className="bg-slate-50 p-2 rounded-xl border border-indigo-200 space-y-2 mt-1">
+                  <input
+                    type="number"
+                    value={tempModalInput}
+                    onChange={(e) => setTempModalInput(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-xs text-slate-900 font-mono"
+                    placeholder="e.g. 50000000"
+                  />
+                  <button
+                    onClick={() => {
+                      const val = parseInt(tempModalInput);
+                      if (!isNaN(val) && val >= 0) {
+                        setModalAwal(val);
+                        localStorage.setItem('afme_modal_awal', val.toString());
+                        setIsEditModalOpen(false);
+                      }
+                    }}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold py-1 rounded-lg cursor-pointer"
+                  >
+                    Simpan Modal
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xl font-extrabold font-mono text-slate-900">{formatIDR(stats.modalAwal)}</p>
+                  <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                    Akumulasi Laba Toko: <strong className="font-mono text-emerald-600 font-bold">{formatIDR(stats.cumulativeNetProfit)}</strong>
+                  </p>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Graphical Comparison Bar */}
-          <div className="space-y-4">
+          {/* Clean Light Neraca Sheet Table */}
+          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Scale size={16} className="text-indigo-600" /> Neraca Keuangan & Aset Toko
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">Ringkasan keseimbangan harta aktif toko (Kas + Stok HP + Sparepart) dengan sumber modal & profit murni.</p>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-xl text-xs font-extrabold font-mono">
+                <CheckCircle size={13} className="text-emerald-600" />
+                NERACA SEIMBANG & AKURAT
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* SISI KIRI: ASET / KEKAYAAN */}
+              <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-xs font-extrabold text-indigo-900">SISI ASET / HARTA (Milik Ruko)</span>
+                  <span className="text-[10px] font-bold text-slate-500 font-mono">Kas + Stok HP + Sparepart</span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center p-2 bg-white rounded-xl border border-slate-100">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Kas Tunai di Laci
+                    </span>
+                    <span className="font-bold font-mono text-slate-900">{formatIDR(stats.saldoKasKumulatif)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 bg-white rounded-xl border border-slate-100">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500"></span> Stok HP (Second &amp; Baru)
+                    </span>
+                    <span className="font-bold font-mono text-slate-900">{formatIDR(stats.totalSisaHpModal)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 bg-white rounded-xl border border-slate-100">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-violet-500"></span> Stok Aksesoris
+                    </span>
+                    <span className="font-bold font-mono text-slate-900">{formatIDR(stats.totalSisaAksesorisModal)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 bg-white rounded-xl border border-slate-100">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500"></span> Stok Sparepart Service
+                    </span>
+                    <span className="font-bold font-mono text-slate-900">{formatIDR(stats.totalSisaSparepartsModal)}</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 flex justify-between items-center font-extrabold text-xs text-indigo-900">
+                    <span>TOTAL ASET TOKO:</span>
+                    <span className="font-mono text-sm text-emerald-700">{formatIDR(stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SISI KANAN: MODAL & LABA */}
+              <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-xs font-extrabold text-indigo-900">SISI MODAL & KEUNTUNGAN</span>
+                  <span className="text-[10px] font-bold text-slate-500 font-mono">Modal Disetor + Profit</span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center p-2 bg-white rounded-xl border border-slate-100">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md">MODAL</span> Modal Awal Disetor
+                    </span>
+                    <span className="font-bold font-mono text-slate-900">{formatIDR(stats.modalAwal)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 bg-white rounded-xl border border-slate-100">
+                    <span className="text-slate-700 flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-extrabold rounded-md">PROFIT</span> Akumulasi Profit Lifetime
+                    </span>
+                    <span className={`font-bold font-mono ${stats.cumulativeNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {stats.cumulativeNetProfit >= 0 ? '+' : ''}{formatIDR(stats.cumulativeNetProfit)}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-indigo-50/80 rounded-xl border border-indigo-100 text-[11px] text-indigo-900 leading-relaxed">
+                    <strong>Poin Kunci:</strong> Total aset di ruko Anda (<strong className="font-mono">{formatIDR(stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}</strong>) murni bersumber dari Modal Awal disetor ditambah Akumulasi Keuntungan Bersih toko.
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 flex justify-between items-center font-extrabold text-xs text-indigo-900">
+                    <span>TOTAL MODAL + LABA:</span>
+                    <span className="font-mono text-sm text-emerald-700">{formatIDR(stats.modalAwal + stats.cumulativeNetProfit)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Step Flow Ledger of Cash Reconciliation */}
+          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 shadow-xs space-y-4">
             <div>
-              <div className="flex justify-between text-xs text-slate-600 mb-1.5">
-                <span className="font-bold">Rasio Pembagian Kas Masuk (Omset total: {formatIDR(stats.totalRevenue)})</span>
-                <span className="font-extrabold font-mono text-indigo-700">
-                  {stats.totalRevenue > 0 ? Math.round((stats.netProfit / stats.totalRevenue) * 100) : 0}% Laba Bersih
-                </span>
-              </div>
-              <div className="w-full h-8 rounded-lg overflow-hidden flex font-mono text-[9px] font-extrabold text-white tracking-wider bg-slate-100 border border-slate-200 shadow-inner">
-                {stats.totalRevenue > 0 ? (
-                  <>
-                    {/* HPP segment */}
-                    <div 
-                      className="bg-amber-500 h-full flex items-center justify-center transition-all duration-500 hover:opacity-90 cursor-help"
-                      style={{ width: `${Math.max(10, (stats.totalHPP / stats.totalRevenue) * 100)}%` }}
-                      title={`HPP/Modal Stok: ${formatIDR(stats.totalHPP)}`}
-                    >
-                      HPP ({Math.round((stats.totalHPP / stats.totalRevenue) * 100)}%)
-                    </div>
-                    {/* OPEX segment */}
-                    {stats.totalOperationalExpense > 0 && (
-                      <div 
-                        className="bg-rose-500 h-full flex items-center justify-center transition-all duration-500 hover:opacity-90 cursor-help"
-                        style={{ width: `${(stats.totalOperationalExpense / stats.totalRevenue) * 100}%` }}
-                        title={`Beban Operasional: ${formatIDR(stats.totalOperationalExpense)}`}
-                      >
-                         OPEX ({Math.round((stats.totalOperationalExpense / stats.totalRevenue) * 100)}%)
-                      </div>
-                    )}
-                    {/* Profit segment */}
-                    {stats.netProfit > 0 && (
-                      <div 
-                        className="bg-emerald-600 h-full flex items-center justify-center transition-all duration-500 hover:opacity-90 cursor-help"
-                        style={{ width: `${(stats.netProfit / stats.totalRevenue) * 100}%` }}
-                        title={`Laba Bersih: ${formatIDR(stats.netProfit)}`}
-                      >
-                        PROFRET ({Math.round((stats.netProfit / stats.totalRevenue) * 100)}%)
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full bg-slate-50 flex items-center justify-center text-slate-400 font-semibold uppercase tracking-widest text-[9.5px]">
-                    Belum ada data pemasukan periode ini
-                  </div>
-                )}
-              </div>
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Calculator size={16} className="text-indigo-600" /> Alur Aliran Kas Masuk & Keluar (Lifetime Cashflow)
+              </h3>
+              <p className="text-slate-500 text-xs mt-0.5">Penjelasan simpel bagaimana uang kas di laci saat ini terbentuk dari modal, transaksi penjualan, jasa servis, dan pengeluaran.</p>
             </div>
 
-            {/* Recharts Interactive Multi-Month Chart */}
-            <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 shadow-inner">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-5">
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-900 flex items-center gap-1.5 uppercase tracking-widest font-sans">
-                    📈 Tren Pendapatan vs Pengeluaran Bulanan
-                  </h4>
-                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">Laba bersih bulanan toko dihitung otomatis sesuai sirkulasi data.</p>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">1</span>
+                  <div>
+                    <p className="font-extrabold text-slate-800">Setoran Modal Awal Kas</p>
+                    <p className="text-[10px] text-slate-500">Uang tunai pertama disetor owner ke laci toko</p>
+                  </div>
                 </div>
-                {/* Visual Legend */}
-                <div className="flex flex-wrap gap-2.5 text-[10px] font-extrabold text-slate-505 shrink-0">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-indigo-600 rounded-xs"></span> Pemasukan</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-rose-500 rounded-xs"></span> Pengeluaran</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-xs"></span> Laba Bersih</span>
-                </div>
+                <span className="font-mono font-bold text-indigo-600">+{formatIDR(stats.modalAwal)}</span>
               </div>
 
-              {/* Chart Container wrapper */}
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={monthlyData}
-                    margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="label" 
-                      tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
-                      tickLine={false}
-                      axisLine={{ stroke: '#cbd5e1' }}
-                    />
-                    <YAxis 
-                      tickFormatter={(value) => {
-                        if (value >= 1000000 || value <= -1000000) return `${(value / 1000000).toFixed(1)}jt`;
-                        if (value >= 1000 || value <= -1000) return `${(value / 1000).toFixed(0)}rb`;
-                        return value;
-                      }}
-                      tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'monospace', fontWeight: 'bold' }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Tooltip 
-                      formatter={(value: any, name: string) => {
-                        const formatted = new Intl.NumberFormat('id-ID', {
-                          style: 'currency',
-                          currency: 'IDR',
-                          minimumFractionDigits: 0
-                        }).format(Number(value));
-                        
-                        let labelName = name;
-                        if (name === 'pemasukan') labelName = 'Pemasukan';
-                        if (name === 'pengeluaran') labelName = 'Pengeluaran';
-                        if (name === 'untung') labelName = 'Laba Bersih';
-                        
-                        return [formatted, labelName];
-                      }}
-                      contentStyle={{ 
-                        backgroundColor: '#ffffff', 
-                        borderColor: '#e2e8f0', 
-                        borderRadius: '12px',
-                        color: '#0f172a',
-                        fontSize: '11px',
-                        boxShadow: '0 6px 12px -2px rgba(0,0,0,0.06)'
-                      }}
-                      itemStyle={{ color: '#0f172a', fontWeight: 'bold', padding: '1px 0' }}
-                      labelStyle={{ color: '#64748b', fontWeight: 'black', marginBottom: '6px', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}
-                    />
-                    <Bar 
-                      dataKey="pemasukan" 
-                      name="pemasukan" 
-                      fill="#4f46e5" 
-                      radius={[4, 4, 0, 0]} 
-                      barSize={18} 
-                    />
-                    <Bar 
-                      dataKey="pengeluaran" 
-                      name="pengeluaran" 
-                      fill="#f43f5e" 
-                      radius={[4, 4, 0, 0]} 
-                      barSize={14} 
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="untung" 
-                      name="untung" 
-                      stroke="#10b981" 
-                      strokeWidth={3} 
-                      dot={{ fill: '#10b981', r: 4, stroke: '#ffffff', strokeWidth: 1.5 }}
-                      activeDot={{ r: 6 }} 
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">2</span>
+                  <div>
+                    <p className="font-extrabold text-slate-800">Penerimaan Omset POS HP & Aksesoris</p>
+                    <p className="text-[10px] text-slate-500">Kas masuk dari total penjualan kasir di toko</p>
+                  </div>
+                </div>
+                <span className="font-mono font-bold text-emerald-600">+{formatIDR(stats.lifetimePosRevenue)}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">3</span>
+                  <div>
+                    <p className="font-extrabold text-slate-800">Penerimaan Omset Service HP</p>
+                    <p className="text-[10px] text-slate-500">Kas masuk dari biaya jasa perbaikan HP selesai</p>
+                  </div>
+                </div>
+                <span className="font-mono font-bold text-emerald-600">+{formatIDR(stats.lifetimeServiceRevenue)}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-xs">4</span>
+                  <div>
+                    <p className="font-extrabold text-slate-800">Belanja Stok HP & Aksesoris</p>
+                    <p className="text-[10px] text-slate-500">Kas keluar untuk pembelian persediaan HP (yang sudah terjual maupun sisa stok)</p>
+                  </div>
+                </div>
+                <span className="font-mono font-bold text-rose-600">-{formatIDR(stats.totalKasKeluarUntukStok)}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-xs">5</span>
+                  <div>
+                    <p className="font-extrabold text-slate-800">Belanja Sparepart Service</p>
+                    <p className="text-[10px] text-slate-500">Kas keluar untuk pengadaan LCD, Baterai, IC, & komponen reparasi</p>
+                  </div>
+                </div>
+                <span className="font-mono font-bold text-rose-600">-{formatIDR(stats.totalKasKeluarBelanjaSparepart)}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-xs">6</span>
+                  <div>
+                    <p className="font-extrabold text-slate-800">Biaya Operasional Toko (OPEX)</p>
+                    <p className="text-[10px] text-slate-500">Pengeluaran wifi, listrik, sewa ruko, gaji karyawan, dan operasional</p>
+                  </div>
+                </div>
+                <span className="font-mono font-bold text-rose-600">-{formatIDR(stats.lifetimeOperationalExpense)}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-200 mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 bg-emerald-600 text-white rounded-lg text-xs font-extrabold">SISA KAS TUNAI</span>
+                  <p className="text-xs font-bold text-slate-900">Total Saldo Uang Fisik Aktif di Laci Toko</p>
+                </div>
+                <span className="font-mono font-extrabold text-emerald-700 text-base">{formatIDR(stats.saldoKasKumulatif)}</span>
               </div>
             </div>
-
-            {/* Source breakdown percentages */}
-            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 shadow-inner">
-              <p className="text-xs font-semibold text-slate-700 mb-4 flex items-center gap-1.5 font-sans uppercase">
-                <Layers size={13} className="text-indigo-600" /> Distribusi Sumber Keuntungan (Margin Bersih)
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* POS HP & Aksesoris */}
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs">
-                  <p className="text-[11px] text-slate-405 uppercase tracking-wider font-extrabold font-sans">Margin Bersih POS</p>
-                  <p className="text-sm font-black text-slate-800 mt-1">
-                    {formatIDR(stats.posRevenue - (stats.hpPurchasingCost + stats.initialRepairsCost))}
-                  </p>
-                  <p className="text-[10px] text-indigo-705 mt-0.5 font-bold font-sans">Penjualan Toko & HP</p>
-                </div>
-
-                {/* Service Reparasi */}
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs">
-                  <p className="text-[11px] text-slate-405 uppercase tracking-wider font-extrabold font-sans">Margin Service</p>
-                  <p className="text-sm font-black text-slate-800 mt-1">
-                    {formatIDR(stats.serviceRevenue - stats.modalSparepartService)}
-                  </p>
-                  <p className="text-[10px] text-emerald-705 mt-0.5 font-bold font-sans">{stats.doneServicesCount} Reparasi Selesai</p>
-                </div>
-
-                {/* Unit Trade in */}
-                <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs">
-                  <p className="text-[11px] text-slate-405 uppercase tracking-wider font-extrabold font-sans">Aset Trade-In</p>
-                  <p className="text-sm font-black text-slate-800 mt-1">
-                    {formatIDR(stats.totalTradeInAllowance)}
-                  </p>
-                  <p className="text-[10px] text-amber-705 mt-0.5 font-bold font-sans">Konversi Unit HP Masuk</p>
-                </div>
-              </div>
-            </div>
-            
-            {/* Cashbook History Log list */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider">Riwayat Kas Masuk & Kas Keluar POS Periode Ini</h4>
-              <div className="max-h-[160px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white shadow-xs">
-                {filteredData.transactions.map((tx) => (
-                  <div key={tx.id} className="flex justify-between items-center p-2.5 text-xs hover:bg-slate-50 transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-750">POS: Penjualan ({tx.customerName || 'Customer Umum'})</p>
-                        {(activeRole === 'owner' || activeRole === 'admin') && (
-                          <button
-                            onClick={() => handleStartEditTrx(tx)}
-                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
-                            title="Edit Transaksi"
-                          >
-                            <Edit2 size={11} />
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-sans">
-                        {tx.date ? new Date(tx.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''} • Kasir: {tx.cashierName}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-emerald-600 font-mono">+{formatIDR(tx.totalAmount)}</p>
-                      <p className="text-[10px] text-slate-455">Untung: {formatIDR(tx.totalProfit)}</p>
-                    </div>
-                  </div>
-                ))}
-                {filteredData.services.filter(s => s.status === 'selesai').map((s) => (
-                  <div key={s.id} className="flex justify-between items-center p-2.5 text-xs hover:bg-slate-50 transition-colors">
-                    <div>
-                      <p className="font-semibold text-slate-750">SERVICE: {s.devModel} - Selesai</p>
-                      <p className="text-[10px] text-slate-400 font-sans">{s.date} • {s.customerName}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-emerald-600 font-mono">+{formatIDR(s.cost)}</p>
-                      <p className="text-[10px] text-rose-505 font-bold">Sparepart: -{formatIDR(s.capitalCost)}</p>
-                    </div>
-                  </div>
-                ))}
-                {filteredData.transactions.filter(t => t.tradeIn).map((tx) => (
-                  <div key={`ti-${tx.id}`} className="flex justify-between items-center p-2.5 text-xs bg-amber-50/20">
-                    <div>
-                      <p className="font-semibold text-amber-900">Trade-In Aset: Tambah {tx.tradeIn?.model}</p>
-                      <p className="text-[10px] text-amber-600">{tx.date} • IMEI: {tx.tradeIn?.imei}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-amber-700 font-mono">-{formatIDR(tx.tradeIn?.buyPrice || 0)}</p>
-                      <p className="text-[10px] text-slate-500">Modal Reparasi: {formatIDR(tx.tradeIn?.repairCost || 0)}</p>
-                    </div>
-                  </div>
-                ))}
-                {filteredData.transactions.length === 0 && filteredData.services.filter(s => s.status === 'selesai').length === 0 && (
-                  <div className="p-6 text-center text-xs text-slate-400 font-medium">Tidak ada pengeluaran/pendapatan operasional standard POS</div>
-                )}
-              </div>
-            </div>
-
           </div>
         </div>
+      )}
 
-        {/* Right column: Manage Expenses & Profit Sharing */}
+      {/* TAB CONTENT 1: LABA RUGI PERIODE */}
+      {activeMainTab === 'laba_rugi' && (
         <div className="space-y-6">
+          {/* Visual Analytics Grid with Custom SVG Chart */}
+          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 space-y-6 shadow-xs">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wide font-sans">
+                📊 Visualisasi Arus Laba Rugi & Komparasi
+              </h3>
+              <p className="text-slate-500 text-[11px] mt-1">Analisis proporsi omset penjualan, beban pokok, operasional, profit, serta perkembangan bulanan.</p>
+            </div>
+
+            {/* Graphical Comparison Bar */}
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-xs text-slate-600 mb-1.5 font-sans">
+                  <span className="font-bold">Rasio Pembagian Kas Masuk (Omset total: {formatIDR(stats.totalRevenue)})</span>
+                  <span className="font-extrabold font-mono text-indigo-700">
+                    {stats.totalRevenue > 0 ? Math.round((stats.netProfit / stats.totalRevenue) * 100) : 0}% Laba Bersih
+                  </span>
+                </div>
+                <div className="w-full h-8 rounded-xl overflow-hidden flex font-mono text-[9px] font-extrabold text-white tracking-wider bg-slate-100 border border-slate-200 shadow-inner">
+                  {stats.totalRevenue > 0 ? (
+                    <>
+                      {/* HPP segment */}
+                      <div 
+                        className="bg-amber-500 h-full flex items-center justify-center transition-all duration-500 hover:opacity-90 cursor-help"
+                        style={{ width: `${Math.max(10, (stats.totalHPP / stats.totalRevenue) * 100)}%` }}
+                        title={`HPP/Modal Stok: ${formatIDR(stats.totalHPP)}`}
+                      >
+                        HPP ({Math.round((stats.totalHPP / stats.totalRevenue) * 100)}%)
+                      </div>
+                      {/* OPEX segment */}
+                      {stats.totalOperationalExpense > 0 && (
+                        <div 
+                          className="bg-rose-500 h-full flex items-center justify-center transition-all duration-500 hover:opacity-90 cursor-help"
+                          style={{ width: `${(stats.totalOperationalExpense / stats.totalRevenue) * 100}%` }}
+                          title={`Beban Operasional: ${formatIDR(stats.totalOperationalExpense)}`}
+                        >
+                          OPEX ({Math.round((stats.totalOperationalExpense / stats.totalRevenue) * 100)}%)
+                        </div>
+                      )}
+                      {/* Profit segment */}
+                      {stats.netProfit > 0 && (
+                        <div 
+                          className="bg-emerald-600 h-full flex items-center justify-center transition-all duration-500 hover:opacity-90 cursor-help"
+                          style={{ width: `${(stats.netProfit / stats.totalRevenue) * 100}%` }}
+                          title={`Laba Bersih: ${formatIDR(stats.netProfit)}`}
+                        >
+                          PROFIT ({Math.round((stats.netProfit / stats.totalRevenue) * 100)}%)
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full bg-slate-50 flex items-center justify-center text-slate-400 font-semibold uppercase tracking-widest text-[9.5px]">
+                      Belum ada data pemasukan periode ini
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Recharts Interactive Multi-Month Chart */}
+              <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 shadow-inner">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-5">
+                  <div>
+                    <h4 className="text-[10px] font-black text-slate-900 flex items-center gap-1.5 uppercase tracking-widest font-sans">
+                      📈 Tren Pendapatan vs Pengeluaran Bulanan
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium mt-0.5">Laba bersih bulanan toko dihitung otomatis sesuai sirkulasi data.</p>
+                  </div>
+                  {/* Visual Legend */}
+                  <div className="flex flex-wrap gap-2.5 text-[10px] font-extrabold text-slate-500 shrink-0 font-sans">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-indigo-600 rounded-xs"></span> Pemasukan</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-rose-500 rounded-xs"></span> Pengeluaran</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-xs"></span> Laba Bersih</span>
+                  </div>
+                </div>
+
+                {/* Chart Container wrapper */}
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={monthlyData}
+                      margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="label" 
+                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} 
+                        tickLine={false}
+                        axisLine={{ stroke: '#cbd5e1' }}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => {
+                          if (value >= 1000000 || value <= -1000000) return `${(value / 1000000).toFixed(1)}jt`;
+                          if (value >= 1000 || value <= -1000) return `${(value / 1000).toFixed(0)}rb`;
+                          return value;
+                        }}
+                        tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'monospace', fontWeight: 'bold' }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip 
+                        formatter={(value: any, name: string) => {
+                          const formatted = new Intl.NumberFormat('id-ID', {
+                            style: 'currency',
+                            currency: 'IDR',
+                            minimumFractionDigits: 0
+                          }).format(Number(value));
+                          
+                          let labelName = name;
+                          if (name === 'pemasukan') labelName = 'Pemasukan';
+                          if (name === 'pengeluaran') labelName = 'Pengeluaran';
+                          if (name === 'untung') labelName = 'Laba Bersih';
+                          
+                          return [formatted, labelName];
+                        }}
+                        contentStyle={{ 
+                          backgroundColor: '#ffffff', 
+                          borderColor: '#e2e8f0', 
+                          borderRadius: '12px',
+                          color: '#0f172a',
+                          fontSize: '11px',
+                          boxShadow: '0 6px 12px -2px rgba(0,0,0,0.06)'
+                        }}
+                        itemStyle={{ color: '#0f172a', fontWeight: 'bold', padding: '1px 0' }}
+                        labelStyle={{ color: '#64748b', fontWeight: 'black', marginBottom: '6px', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}
+                      />
+                      <Bar 
+                        dataKey="pemasukan" 
+                        name="pemasukan" 
+                        fill="#4f46e5" 
+                        radius={[4, 4, 0, 0]} 
+                        barSize={18} 
+                      />
+                      <Bar 
+                        dataKey="pengeluaran" 
+                        name="pengeluaran" 
+                        fill="#f43f5e" 
+                        radius={[4, 4, 0, 0]} 
+                        barSize={14} 
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="untung" 
+                        name="untung" 
+                        stroke="#10b981" 
+                        strokeWidth={3} 
+                        dot={{ fill: '#10b981', r: 4, stroke: '#ffffff', strokeWidth: 1.5 }}
+                        activeDot={{ r: 6 }} 
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Source breakdown percentages */}
+              <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 shadow-inner">
+                <p className="text-xs font-semibold text-slate-700 mb-4 flex items-center gap-1.5 font-sans uppercase">
+                  <Layers size={13} className="text-indigo-600" /> Distribusi Sumber Keuntungan (Margin Bersih)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* POS HP & Aksesoris */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs">
+                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-extrabold font-sans">Margin Bersih POS</p>
+                    <p className="text-sm font-black text-slate-800 mt-1 font-mono">
+                      {formatIDR(stats.posRevenue - (stats.hpPurchasingCost + stats.initialRepairsCost))}
+                    </p>
+                    <p className="text-[10px] text-indigo-700 mt-0.5 font-bold font-sans">Penjualan Toko & HP</p>
+                  </div>
+
+                  {/* Service Reparasi */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs">
+                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-extrabold font-sans">Margin Service</p>
+                    <p className="text-sm font-black text-slate-800 mt-1 font-mono">
+                      {formatIDR(stats.serviceRevenue - stats.modalSparepartService)}
+                    </p>
+                    <p className="text-[10px] text-emerald-700 mt-0.5 font-bold font-sans">{stats.doneServicesCount} Reparasi Selesai</p>
+                  </div>
+
+                  {/* Unit Trade in */}
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-xs">
+                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-extrabold font-sans">Aset Trade-In</p>
+                    <p className="text-sm font-black text-slate-800 mt-1 font-mono">
+                      {formatIDR(stats.totalTradeInAllowance)}
+                    </p>
+                    <p className="text-[10px] text-amber-700 mt-0.5 font-bold font-sans">Konversi Unit HP Masuk</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cashbook History Log list */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider">Riwayat Transaksi Penjualan & Service Periode Ini</h4>
+                <div className="max-h-[220px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white shadow-xs">
+                  {filteredData.transactions.map((tx) => (
+                    <div key={tx.id} className="flex justify-between items-center p-3 text-xs hover:bg-slate-50 transition-colors">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-800">POS: Penjualan ({tx.customerName || 'Customer Umum'})</p>
+                          {(activeRole === 'owner' || activeRole === 'admin') && (
+                            <button
+                              onClick={() => handleStartEditTrx(tx)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                              title="Edit Transaksi"
+                            >
+                              <Edit2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">
+                          {tx.date ? new Date(tx.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''} • Kasir: {tx.cashierName}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-emerald-600 font-mono">+{formatIDR(tx.totalAmount)}</p>
+                        <p className="text-[10px] text-slate-500">Untung: {formatIDR(tx.totalProfit)}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredData.services.filter(s => s.status === 'selesai').map((s) => (
+                    <div key={s.id} className="flex justify-between items-center p-3 text-xs hover:bg-slate-50 transition-colors">
+                      <div>
+                        <p className="font-semibold text-slate-800">SERVICE: {s.devModel} - Selesai</p>
+                        <p className="text-[10px] text-slate-400 font-sans mt-0.5">{s.date} • {s.customerName}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-emerald-600 font-mono">+{formatIDR(s.cost)}</p>
+                        <p className="text-[10px] text-rose-500 font-bold">Sparepart: -{formatIDR(s.capitalCost)}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredData.transactions.filter(t => t.tradeIn).map((tx) => (
+                    <div key={`ti-${tx.id}`} className="flex justify-between items-center p-3 text-xs bg-amber-50/20">
+                      <div>
+                        <p className="font-semibold text-amber-900">Trade-In Aset: Tambah {tx.tradeIn?.model}</p>
+                        <p className="text-[10px] text-amber-600 mt-0.5">{tx.date} • IMEI: {tx.tradeIn?.imei}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-amber-700 font-mono">-{formatIDR(tx.tradeIn?.buyPrice || 0)}</p>
+                        <p className="text-[10px] text-slate-500">Modal Reparasi: {formatIDR(tx.tradeIn?.repairCost || 0)}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredData.transactions.length === 0 && filteredData.services.filter(s => s.status === 'selesai').length === 0 && (
+                    <div className="p-6 text-center text-xs text-slate-400 font-medium">Tidak ada transaksi penjualan atau servis pada periode ini</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB CONTENT 3: INPUT OPEX & BAGI HASIL */}
+      {activeMainTab === 'opex' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Operational Expense Tracker (Beban Biaya) */}
-          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 space-y-4 shadow-sm">
+          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 space-y-4 shadow-xs">
             <div>
               <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider font-sans">Input Biaya Operasional / OPEX</h3>
               <p className="text-slate-500 text-[11px] mt-0.5">Catat kas keluar untuk internet, listrik, sewa ruko, gaji karyawan, dll.</p>
             </div>
 
-            <form onSubmit={handleAddExpenseSubmit} className="space-y-2.5 text-xs">
+            <form onSubmit={handleAddExpenseSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Nama Pengeluaran</label>
                 <input 
                   type="text" 
                   value={expenseName}
                   onChange={(e) => setExpenseName(e.target.value)}
-                  placeholder="e.g. Bayar Wifi Toko"
+                  placeholder="e.g. Bayar Wifi Toko / Token Listrik"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Biaya (Rp)</label>
                   <input 
@@ -1385,15 +1355,15 @@ export default function LaporanKeuangan({
             {/* List of custom expenses */}
             <div>
               <p className="text-xs font-bold text-slate-700 mb-2 font-sans uppercase">Daftar Biaya Terdaftar ({filteredData.expenses.length} Item)</p>
-              <div className="space-y-1.5 max-h-[170px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
                 {filteredData.expenses.map((exp) => (
                   <div key={exp.id} className="bg-slate-50 p-2.5 rounded-xl flex items-center justify-between text-xs border border-slate-200">
                     <div className="max-w-[70%]">
                       <p className="font-bold text-slate-800 truncate">{exp.name}</p>
-                      <p className="text-[10px] text-slate-455 capitalize mt-0.5">{exp.date} • {exp.category}</p>
+                      <p className="text-[10px] text-slate-500 capitalize mt-0.5">{exp.date} • {exp.category}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-rose-600 font-mono text-[11px] shrink-0">-{formatIDR(exp.amount)}</span>
+                      <span className="font-bold text-rose-600 font-mono text-xs shrink-0">-{formatIDR(exp.amount)}</span>
                       <button 
                         onClick={() => onDeleteExpense(exp.id)}
                         className="text-slate-400 hover:text-rose-600 p-1 rounded-sm transition cursor-pointer"
@@ -1412,7 +1382,7 @@ export default function LaporanKeuangan({
           </div>
 
           {/* Profit Sharing & Dividend Calculator Simulator */}
-          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 space-y-4 shadow-sm">
+          <div className="bg-white rounded-3xl border border-slate-200/85 p-6 space-y-4 shadow-xs">
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider font-sans">Simulasi Bagi Hasil Toko</h3>
@@ -1439,7 +1409,6 @@ export default function LaporanKeuangan({
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
                         setOwnerShare(val);
-                        // Adjust investor to balance out
                         setInvestorShare(100 - val - bonusShare < 0 ? 0 : 100 - val - bonusShare);
                       }}
                       className="w-full accent-indigo-600 cursor-pointer"
@@ -1487,17 +1456,17 @@ export default function LaporanKeuangan({
                     <span>Bagian Owner ({ownerShare}%):</span>
                     <span>{formatIDR((Math.max(0, stats.netProfit) * ownerShare) / 100)}</span>
                   </div>
-                  <div className="flex justify-between text-emerald-705 font-bold">
+                  <div className="flex justify-between text-emerald-700 font-bold">
                     <span>Bagian Investor ({investorShare}%):</span>
                     <span>{formatIDR((Math.max(0, stats.netProfit) * investorShare) / 100)}</span>
                   </div>
-                  <div className="flex justify-between text-amber-705 font-bold">
+                  <div className="flex justify-between text-amber-700 font-bold">
                     <span>Bonus Staff/Dana Kas ({bonusShare}%):</span>
                     <span>{formatIDR((Math.max(0, stats.netProfit) * bonusShare) / 100)}</span>
                   </div>
                 </div>
 
-                <p className="text-[10px] text-slate-455 leading-relaxed flex items-start gap-1 font-sans">
+                <p className="text-[10px] text-slate-500 leading-relaxed flex items-start gap-1 font-sans">
                   <Info size={12} className="shrink-0 mt-0.5 text-indigo-600" />
                   Gunakan simulator bagi hasil ini untuk mengevaluasi kesehatan cashflow toko sebelum melakukan penarikan dividen bulanan.
                 </p>
@@ -1505,10 +1474,289 @@ export default function LaporanKeuangan({
             )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* TAB CONTENT 4: AUDIT VISUAL & REKONSILIASI KEUANGAN */}
+      {activeMainTab === 'audit' && (
+        <div className="space-y-6">
+          {/* Status Indicator Card (Selisih Indicator) */}
+          {Math.abs(stats.selisihRekonsiliasi) === 0 ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 bg-emerald-500/20 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/30">
+                  <CheckCircle size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 bg-emerald-600 text-white font-extrabold text-[10px] rounded-lg tracking-wider font-mono uppercase">
+                      ✅ REKONSILIASI 100% AKURAT
+                    </span>
+                    <span className="text-slate-500 text-xs font-semibold font-mono">
+                      • Selisih Unexplained: Rp 0
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-extrabold text-slate-900 mt-1">
+                    Buku Kas Tunai & Kalkulasi Laba Bersih Terverifikasi Seimbang Perfect
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Hasil kalkulasi Laba Bersih ({formatIDR(stats.netProfit)}) dan Akumulasi Kas ({formatIDR(stats.saldoKasKumulatif)}) seimbang sempurna terhadap persediaan modal stok barang ({formatIDR(stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}).
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-500/10 border border-amber-500/30 p-5 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 bg-amber-500/20 text-amber-600 rounded-2xl flex items-center justify-center shrink-0 border border-amber-500/30">
+                  <AlertTriangle size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 bg-amber-600 text-white font-extrabold text-[10px] rounded-lg tracking-wider font-mono uppercase">
+                      ⚠️ PERHATIAN: SELISIH REKONSILIASI
+                    </span>
+                    <span className="text-amber-700 font-extrabold text-xs font-mono">
+                      • Selisih: {formatIDR(Math.abs(stats.selisihRekonsiliasi))}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-extrabold text-slate-900 mt-1">
+                    Terdeteksi Selisih Rekonsiliasi Antara Aset Physical dan Hak Capital
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Terdapat perbedaan nilai sebesar {formatIDR(Math.abs(stats.selisihRekonsiliasi))} antara total aset (Kas + Stok) dengan total modal disetor + akumulasi laba bersih.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TABEL REKONSILIASI FORMULA LABA BERSIH */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/85 shadow-xs space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Calculator size={18} className="text-indigo-600" />
+                  1. Tabel Rekonsiliasi Formula Laba Bersih ({filteredData.rangeText})
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Kalkulasi Eksplisit: (Total Pendapatan - COGS = Laba Kotor) kemudian dikurangi OPEX untuk menghasilkan Laba Bersih yang akurat.
+                </p>
+              </div>
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-mono text-xs font-bold rounded-xl border border-indigo-100">
+                Formula Audit Mat
+              </span>
+            </div>
+
+            {/* Reconciliation Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-extrabold">
+                    <th className="py-3 px-4 rounded-l-xl">Langkah & Komponen Keuangan</th>
+                    <th className="py-3 px-4">Formula / Sumber Rincian</th>
+                    <th className="py-3 px-4 text-right rounded-r-xl">Nominal Rupiah (IDR)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {/* Step 1: Pendapatan */}
+                  <tr className="hover:bg-slate-50/60 transition">
+                    <td className="py-2.5 px-4 font-semibold text-slate-700">1. Penjualan POS (HP & Aksesoris)</td>
+                    <td className="py-2.5 px-4 text-slate-500">Kas Masuk Kasir POS</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-800">{formatIDR(stats.posRevenue)}</td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/60 transition">
+                    <td className="py-2.5 px-4 font-semibold text-slate-700">2. Pendapatan Jasa Service HP</td>
+                    <td className="py-2.5 px-4 text-slate-500">Tagihan Service Selesai</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-800">{formatIDR(stats.serviceRevenue)}</td>
+                  </tr>
+                  <tr className="bg-emerald-50/70 border-y border-emerald-100 font-extrabold">
+                    <td className="py-3 px-4 text-emerald-900 flex items-center gap-1.5">
+                      <ArrowUpRight size={15} className="text-emerald-600" />
+                      TOTAL PENDAPATAN (REVENUE)
+                    </td>
+                    <td className="py-3 px-4 text-emerald-800 font-mono text-[11px]">(POS + Jasa Service)</td>
+                    <td className="py-3 px-4 text-right font-mono text-sm text-emerald-700">{formatIDR(stats.totalRevenue)}</td>
+                  </tr>
+
+                  {/* Step 2: COGS / HPP */}
+                  <tr className="hover:bg-slate-50/60 transition">
+                    <td className="py-2.5 px-4 font-semibold text-slate-700 pl-6">• Modal Pembelian & Repair HP POS Terjual</td>
+                    <td className="py-2.5 px-4 text-slate-500">Modal Modal HP + Perbaikan Awal Terjual</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-rose-600">-{formatIDR(stats.hpPurchasingCost + stats.initialRepairsCost)}</td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/60 transition">
+                    <td className="py-2.5 px-4 font-semibold text-slate-700 pl-6">• Modal Sparepart Service Terpakai</td>
+                    <td className="py-2.5 px-4 text-slate-500">Modal Suku Cadang Service Selesai</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-rose-600">-{formatIDR(stats.modalSparepartService)}</td>
+                  </tr>
+                  <tr className="bg-amber-50/70 border-y border-amber-100 font-extrabold">
+                    <td className="py-3 px-4 text-amber-900 flex items-center gap-1.5">
+                      <ArrowDownRight size={15} className="text-amber-600" />
+                      TOTAL HARGA POKOK PENJUALAN (COGS / HPP)
+                    </td>
+                    <td className="py-3 px-4 text-amber-800 font-mono text-[11px]">(Modal Terjual + Sparepart)</td>
+                    <td className="py-3 px-4 text-right font-mono text-sm text-amber-800">-{formatIDR(stats.totalHPP)}</td>
+                  </tr>
+
+                  {/* Step 3: Laba Kotor */}
+                  <tr className="bg-indigo-50/80 border-y border-indigo-200 font-extrabold">
+                    <td className="py-3.5 px-4 text-indigo-950 flex items-center gap-1.5">
+                      <Scale size={16} className="text-indigo-600" />
+                      KEUNTUNGAN KOTOR (GROSS PROFIT)
+                    </td>
+                    <td className="py-3.5 px-4 text-indigo-800 font-mono text-[11px]">Formula: Total Pendapatan - Total COGS</td>
+                    <td className="py-3.5 px-4 text-right font-mono text-base text-indigo-800">{formatIDR(stats.grossProfit)}</td>
+                  </tr>
+
+                  {/* Step 4: OPEX */}
+                  <tr className="hover:bg-slate-50/60 transition">
+                    <td className="py-2.5 px-4 font-semibold text-slate-700 pl-6">• Total Beban Operasional & Toko (OPEX)</td>
+                    <td className="py-2.5 px-4 text-slate-500">Beban Listrik, Sewa, Gaji, Operasional Usaha</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-rose-600">-{formatIDR(stats.totalOperationalExpense)}</td>
+                  </tr>
+
+                  {/* Step 5: Laba Bersih */}
+                  <tr className="bg-emerald-100/90 border-t-2 border-emerald-500 font-black text-sm">
+                    <td className="py-4 px-4 text-emerald-950 flex items-center gap-2">
+                      <TrendingUp size={18} className="text-emerald-700" />
+                      LABA BERSIH AKHIR (OPERATING NET PROFIT)
+                    </td>
+                    <td className="py-4 px-4 text-emerald-900 font-mono text-xs">Formula: Gross Profit - Total OPEX</td>
+                    <td className="py-4 px-4 text-right font-mono text-base text-emerald-900 underline decoration-emerald-600">
+                      {formatIDR(stats.netProfit)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* TABEL REKONSILIASI NERACA BUKU KAS VS KEUNTUNGAN */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/85 shadow-xs space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <Scale size={18} className="text-emerald-600" />
+                  2. Tabel Audit Rekonsiliasi Neraca Buku Kas ({formatIDR(stats.saldoKasKumulatif)}) vs Profit
+                </h3>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Verifikasi Seimbang (Double-Entry Balance): Menguji kesesuaian antara Total Aset Fisik vs Total Modal & Akumulasi Profit.
+                </p>
+              </div>
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-mono text-xs font-bold rounded-xl border border-emerald-100">
+                Audit Balance Proof
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs font-sans">
+              {/* SISI AKTIVA */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="border-b border-slate-200 pb-2 flex justify-between font-extrabold text-emerald-800">
+                  <span className="flex items-center gap-1.5"><Wallet size={15} /> SISI AKTIVA (ASET PHYSICAL & KAS)</span>
+                  <span className="font-mono">NOMINAL</span>
+                </div>
+                <div className="space-y-2 text-slate-700">
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">1. Saldo Kas Tunai Kasir</span>
+                      <span className="text-[10px] text-slate-500">Uang Tunai di Laci Kasir (Cash on Hand)</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-slate-900 self-center">{formatIDR(stats.saldoKasKumulatif)}</span>
+                  </div>
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">2. Nilai Stok HP Ada</span>
+                      <span className="text-[10px] text-slate-500">Kas Terikat di Persediaan HP Belum Terjual</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-slate-900 self-center">{formatIDR(stats.totalSisaHpModal)}</span>
+                  </div>
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">3. Nilai Stok Aksesoris Ada</span>
+                      <span className="text-[10px] text-slate-500">Kas Terikat di Aksesoris Belum Terjual</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-slate-900 self-center">{formatIDR(stats.totalSisaAksesorisModal)}</span>
+                  </div>
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">4. Nilai Stok Sparepart Service</span>
+                      <span className="text-[10px] text-slate-500">Kas Terikat di Stok Sparepart Tersedia</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-slate-900 self-center">{formatIDR(stats.totalSisaSparepartsModal)}</span>
+                  </div>
+                </div>
+                <div className="border-t border-slate-300 pt-2 flex justify-between font-black text-emerald-900 bg-emerald-100/70 p-3 rounded-xl border border-emerald-200">
+                  <span>TOTAL ASET AKTIVA:</span>
+                  <span className="font-mono text-sm">{formatIDR(stats.aktivaTotal)}</span>
+                </div>
+              </div>
+
+              {/* SISI PASIVA */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="border-b border-slate-200 pb-2 flex justify-between font-extrabold text-indigo-800">
+                  <span className="flex items-center gap-1.5"><Briefcase size={15} /> SISI PASIVA (HAK MODAL & LABA)</span>
+                  <span className="font-mono">NOMINAL</span>
+                </div>
+                <div className="space-y-2 text-slate-700">
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">1. Modal Awal Disetor</span>
+                      <span className="text-[10px] text-slate-500">Suntikan Modal Disetor Pertama Kali</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-slate-900 self-center">{formatIDR(stats.modalAwal)}</span>
+                  </div>
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">2. Akumulasi Laba Bersih Toko</span>
+                      <span className="text-[10px] text-slate-500">Total Akumulasi Keuntungan Bersih</span>
+                    </div>
+                    <span className="font-mono font-extrabold text-emerald-700 self-center">+{formatIDR(stats.cumulativeNetProfit)}</span>
+                  </div>
+                  <div className="flex justify-between bg-white p-2.5 rounded-xl border border-slate-200/70 opacity-50">
+                    <div>
+                      <span className="font-bold text-slate-800 block">3. Penyesuaian Audit Tambahan</span>
+                      <span className="text-[10px] text-slate-500">Penyesuaian Manual (Jika Ada)</span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-500 self-center">Rp 0</span>
+                  </div>
+                </div>
+                <div className="border-t border-slate-300 pt-2 flex justify-between font-black text-indigo-900 bg-indigo-100/70 p-3 rounded-xl border border-indigo-200">
+                  <span>TOTAL PASIVA KAPITAL:</span>
+                  <span className="font-mono text-sm">{formatIDR(stats.pasivaTotal)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Reconciliation Comparison Status Footer */}
+            <div className={`p-4 rounded-2xl border text-center space-y-1 ${
+              Math.abs(stats.selisihRekonsiliasi) === 0 
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+                : 'bg-amber-50 border-amber-300 text-amber-900'
+            }`}>
+              <div className="flex items-center justify-center gap-2 font-black text-xs uppercase tracking-wide">
+                {Math.abs(stats.selisihRekonsiliasi) === 0 ? (
+                  <>
+                    <CheckCircle size={16} className="text-emerald-600" />
+                    <span>STATUS REKONSILIASI: SEIMBANG PERFECT 100% (0 SELISIH)</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={16} className="text-amber-600" />
+                    <span>STATUS REKONSILIASI: DITEMUKAN SELISIH SEBESAR {formatIDR(Math.abs(stats.selisihRekonsiliasi))}</span>
+                  </>
+                )}
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Total Aktiva Aset Real ({formatIDR(stats.aktivaTotal)}) {Math.abs(stats.selisihRekonsiliasi) === 0 ? 'persis sama dengan' : 'berbeda dari'} Total Pasiva Modal & Profit ({formatIDR(stats.pasivaTotal)}). 
+                Buku kas tunai {formatIDR(stats.saldoKasKumulatif)} terverifikasi valid.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Transaction Modal */}
-      {editingTransaction && (
+      {editingTransaction && (activeRole === 'owner' || activeRole === 'admin') && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
@@ -1653,9 +1901,15 @@ export default function LaporanKeuangan({
             {/* Printable Area layout content */}
             <div id="financial-statement-print-area" className="p-6 bg-slate-50/50 border border-slate-200 rounded-xl space-y-4 font-sans text-xs">
               {/* Report Header */}
-              <div className="text-center pb-4 border-b border-dashed border-slate-200">
-                <h4 className="text-base font-bold text-slate-950">AFME STORE</h4>
-                <p className="text-[11px] text-slate-500">Sistem Laporan Keuangan Resmi & Laba Rugi</p>
+              <div className="text-center pb-4 border-b border-dashed border-slate-200 flex flex-col items-center">
+                <img 
+                  src={localStorage.getItem('afme_custom_logo') || '/logo.png'} 
+                  alt="AFME STORE Logo" 
+                  className="w-12 h-12 object-contain rounded-xl bg-slate-950 p-1 border border-amber-400/40 shadow-sm mb-2"
+                  referrerPolicy="no-referrer"
+                />
+                <h4 className="text-base font-extrabold text-slate-950 tracking-tight">AFME STORE</h4>
+                <p className="text-[11px] text-slate-500">Sistem Laporan Keuangan Resmi &amp; Laba Rugi</p>
                 <div className="mt-2 inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full font-bold text-[10px]">
                   Periode: {filteredData.rangeText}
                 </div>
@@ -1774,6 +2028,243 @@ export default function LaporanKeuangan({
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AUDIT FINANCIAL & REKONSILIASI MATEMATIKA */}
+      {isAuditModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-indigo-900/60 text-white w-full max-w-4xl rounded-3xl p-6 space-y-6 shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+            {/* Header Modal */}
+            <div className="flex justify-between items-start border-b border-indigo-900/50 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                    <CheckCircle size={18} />
+                  </span>
+                  <h3 className="font-extrabold text-lg text-white font-sans">Audit & Verifikasi Transparansi Keuangan</h3>
+                </div>
+                <p className="text-slate-400 text-xs mt-1 font-sans">
+                  Pemisahan eksplisit Perhitungan Pendapatan, HPP/COGS, OPEX, serta Verifikasi Selisih Buku Kas vs Keuntungan Bersih.
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsAuditModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+
+            {/* SEKSI 1: Rincian Eksplisit Periode Terpilih */}
+            <div className="bg-slate-950/70 border border-indigo-900/40 rounded-2xl p-5 space-y-4">
+              <div className="flex justify-between items-center border-b border-indigo-900/40 pb-2">
+                <h4 className="text-xs font-extrabold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                  <Calculator size={14} className="text-indigo-400" />
+                  1. Rincian Rumus Keuntungan Bersih Periode ({filteredData.rangeText})
+                </h4>
+                <span className="text-[10px] px-2 py-0.5 bg-indigo-950 text-indigo-300 rounded-lg border border-indigo-800 font-mono">
+                  {filteredData.rangeText}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
+                {/* Total Pendapatan / Revenue */}
+                <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <span className="font-extrabold text-emerald-400 text-[11px] block uppercase tracking-wide">
+                    A. TOTAL PENDAPATAN (REVENUE)
+                  </span>
+                  <div className="space-y-1.5 text-slate-300 text-[11px]">
+                    <div className="flex justify-between">
+                      <span>• Penjualan POS (HP & Aksesoris):</span>
+                      <span className="font-mono text-white font-semibold">{formatIDR(stats.posRevenue)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Pendapatan Service HP (Tuntas):</span>
+                      <span className="font-mono text-white font-semibold">{formatIDR(stats.serviceRevenue)}</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-800 pt-2 flex justify-between font-bold text-emerald-300">
+                    <span>TOTAL PENDAPATAN:</span>
+                    <span className="font-mono">{formatIDR(stats.totalRevenue)}</span>
+                  </div>
+                </div>
+
+                {/* COGS / HPP */}
+                <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <span className="font-extrabold text-amber-400 text-[11px] block uppercase tracking-wide">
+                    B. BEBAN HARGA POKOK PENJUALAN (COGS / HPP)
+                  </span>
+                  <div className="space-y-1.5 text-slate-300 text-[11px]">
+                    <div className="flex justify-between">
+                      <span>• Modal Produk POS Terjual:</span>
+                      <span className="font-mono text-white font-semibold">{formatIDR(stats.hpPurchasingCost + stats.initialRepairsCost)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Modal Sparepart Service:</span>
+                      <span className="font-mono text-white font-semibold">{formatIDR(stats.modalSparepartService)}</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-800 pt-2 flex justify-between font-bold text-amber-300">
+                    <span>TOTAL COGS / HPP:</span>
+                    <span className="font-mono">{formatIDR(stats.totalHPP)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Laba Kotor & OPEX Calculation Step */}
+              <div className="bg-slate-900/90 p-4 rounded-xl border border-indigo-900/30 space-y-2.5 text-xs font-sans">
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="font-semibold">Laba Kotor (Gross Profit) = Total Pendapatan - Total COGS:</span>
+                  <span className="font-mono font-bold text-indigo-300">
+                    {formatIDR(stats.totalRevenue)} - {formatIDR(stats.totalHPP)} = {formatIDR(stats.grossProfit)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-slate-200 border-t border-slate-800 pt-2">
+                  <span className="font-semibold">Total Biaya Operasional (OPEX):</span>
+                  <span className="font-mono font-bold text-rose-400">-{formatIDR(stats.totalOperationalExpense)}</span>
+                </div>
+                <div className="flex justify-between items-center bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl text-emerald-300 font-bold mt-2">
+                  <span>KEUNTUNGAN BERSIH PERIODE TERPILIH (NET PROFIT):</span>
+                  <span className="font-mono text-sm underline decoration-emerald-400">{formatIDR(stats.netProfit)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* SEKSI 2: Audit Verifikasi Selisih Kas vs Profit Kumulatif */}
+            <div className="bg-slate-950/70 border border-emerald-900/40 rounded-2xl p-5 space-y-4">
+              <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
+                <h4 className="text-xs font-extrabold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                  <Scale size={14} className="text-emerald-400" />
+                  2. Verifikasi Audit Selisih Buku Kas ({formatIDR(stats.saldoKasKumulatif)}) vs Keuntungan Bersih
+                </h4>
+                <div className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold font-mono">
+                  VERIFIKASI BALANCE 100%
+                </div>
+              </div>
+
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3 text-xs text-slate-300 font-sans leading-relaxed">
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <Info size={14} className="text-indigo-400" />
+                  Mengapa Nominal Buku Kas Berbeda dengan Angka Keuntungan Bersih?
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-bold text-indigo-300 block uppercase">Faktor 1: Modal Awal disetor ({formatIDR(stats.modalAwal)})</span>
+                    <p className="text-[11px] text-slate-400">
+                      Uang di laci kasir menyertakan Modal Awal milik pemilik toko yang disuntikkan pertama kali untuk operasional, BUKAN hasil keuntungan dagang.
+                    </p>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-bold text-amber-300 block uppercase">Faktor 2: Uang Terikat di Stok ({formatIDR(stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)})</span>
+                    <p className="text-[11px] text-slate-400">
+                      Sebagian uang kas tunai telah Anda pakai untuk belanja stok HP, Aksesoris, & Sparepart yang belum terjual. Uang ini <strong className="text-slate-200">berubah bentuk menjadi Aset Fisik di Ruko</strong>, bukan hilang.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* T-ACCOUNT BALANCE TABLE VERIFICATION */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-indigo-900/40 space-y-3">
+                <p className="text-[11px] font-bold text-indigo-200 uppercase tracking-wider font-sans text-center">
+                  Tabel Uji Verifikasi Seimbang (Double-Entry Audit Proof)
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
+                  {/* SISI KIRI: TOTAL ASET FISIK & KAS */}
+                  <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                    <div className="border-b border-slate-800 pb-1 flex justify-between font-extrabold text-emerald-400">
+                      <span>SISI AKTIVA (ASET)</span>
+                      <span>NOMINAL</span>
+                    </div>
+                    <div className="space-y-1 text-slate-300 text-[11px]">
+                      <div className="flex justify-between">
+                        <span>1. Uang Kas Tunai (Cash on Hand):</span>
+                        <span className="font-mono text-white font-semibold">{formatIDR(stats.saldoKasKumulatif)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>2. Nilai Stok HP Ada:</span>
+                        <span className="font-mono text-white font-semibold">{formatIDR(stats.totalSisaHpModal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>3. Nilai Stok Aksesoris Ada:</span>
+                        <span className="font-mono text-white font-semibold">{formatIDR(stats.totalSisaAksesorisModal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>4. Nilai Stok Sparepart Service Ada:</span>
+                        <span className="font-mono text-white font-semibold">{formatIDR(stats.totalSisaSparepartsModal)}</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-800 pt-2 flex justify-between font-extrabold text-emerald-300">
+                      <span>TOTAL KEKAYAAN AKTIVA:</span>
+                      <span className="font-mono">{formatIDR(stats.saldoKasKumulatif + stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}</span>
+                    </div>
+                  </div>
+
+                  {/* SISI KANAN: MODAL & LABA KUMULATIF */}
+                  <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                    <div className="border-b border-slate-800 pb-1 flex justify-between font-extrabold text-indigo-300">
+                      <span>SISI PASIVA (KEPEMILIKAN)</span>
+                      <span>NOMINAL</span>
+                    </div>
+                    <div className="space-y-1 text-slate-300 text-[11px]">
+                      <div className="flex justify-between">
+                        <span>1. Modal Awal Operasional Disetor:</span>
+                        <span className="font-mono text-white font-semibold">{formatIDR(stats.modalAwal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>2. Akumulasi Keuntungan Bersih Toko:</span>
+                        <span className="font-mono text-emerald-400 font-semibold">+{formatIDR(stats.cumulativeNetProfit)}</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-800 pt-2 flex justify-between font-extrabold text-indigo-300">
+                      <span>TOTAL HAK MODAL & LABA:</span>
+                      <span className="font-mono">{formatIDR(stats.modalAwal + stats.cumulativeNetProfit)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Box */}
+                <div className={`p-3 rounded-xl text-center space-y-1 border ${
+                  Math.abs(stats.selisihRekonsiliasi) === 0 
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200' 
+                    : 'bg-amber-950/60 border-amber-500/40 text-amber-200'
+                }`}>
+                  <p className={`text-xs font-black uppercase tracking-wide flex items-center justify-center gap-1.5 ${
+                    Math.abs(stats.selisihRekonsiliasi) === 0 ? 'text-emerald-300' : 'text-amber-300'
+                  }`}>
+                    {Math.abs(stats.selisihRekonsiliasi) === 0 ? (
+                      <>
+                        <CheckCircle size={15} />
+                        HASIL AUDIT FINANCIAL: SAMA & SEIMBANG 100% (AKURAT TERVERIFIKASI)
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={15} />
+                        HASIL AUDIT FINANCIAL: DITEMUKAN SELISIH SEBESAR {formatIDR(Math.abs(stats.selisihRekonsiliasi))}
+                      </>
+                    )}
+                  </p>
+                  <p className="text-[10.5px] font-sans">
+                    {Math.abs(stats.selisihRekonsiliasi) === 0 
+                      ? `Selisih antara Buku Kas Tunai (${formatIDR(stats.saldoKasKumulatif)}) dan Akumulasi Keuntungan (${formatIDR(stats.cumulativeNetProfit)}) terbukti persis disebabkan oleh Modal Awal disetor (${formatIDR(stats.modalAwal)}) minus Uang Kas Terikat pada Stok Barang Belum Terjual (${formatIDR(stats.totalSisaPersediaanModal + stats.totalSisaSparepartsModal)}).`
+                      : `Terdeteksi selisih tidak seimbang sebesar ${formatIDR(Math.abs(stats.selisihRekonsiliasi))} antara Aktiva dan Pasiva. Periksa kembali pencatatan arus kas atau suntikan modal.`
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setIsAuditModalOpen(false)}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition cursor-pointer shadow-xs"
+              >
+                Selesai & Tutup Modal Audit
               </button>
             </div>
           </div>

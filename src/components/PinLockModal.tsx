@@ -7,9 +7,10 @@ import { isSupabaseConfigured } from '../lib/supabase';
 
 interface PinLockModalProps {
   onUnlock: (account: AppAccount) => void;
+  appLogo?: string;
 }
 
-export default function PinLockModal({ onUnlock }: PinLockModalProps) {
+export default function PinLockModal({ onUnlock, appLogo = '/logo.png' }: PinLockModalProps) {
   const [accounts, setAccounts] = useState<AppAccount[]>([]);
   const [selectedUsername, setSelectedUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -91,17 +92,18 @@ export default function PinLockModal({ onUnlock }: PinLockModalProps) {
           shake ? 'animate-bounce border-rose-300 shadow-rose-200/20' : ''
         }`}
       >
-        {/* Rounded Shield Avatar Icon */}
-        <div className="relative mb-5 flex items-center justify-center">
-          <div className="absolute inset-0 bg-indigo-100 rounded-[2rem] blur-xl opacity-40 animate-pulse" />
-          <div className="w-16 h-16 rounded-[1.3rem] bg-gradient-to-tr from-indigo-600 to-violet-600 border border-indigo-500/20 flex items-center justify-center text-white shadow-xl shadow-indigo-600/15 relative z-10">
-            {password.length > 0 ? (
-              <Unlock className="animate-pulse" size={26} />
-            ) : (
-              <Lock size={26} />
-            )}
+        {/* Store Logo & Avatar Icon */}
+        <div className="relative mb-4 flex items-center justify-center">
+          <div className="absolute inset-0 bg-amber-400/20 rounded-full blur-xl opacity-60 animate-pulse" />
+          <div className="w-20 h-20 rounded-2xl bg-slate-950 border border-amber-400/40 p-1 shadow-xl shadow-slate-900/20 relative z-10 flex items-center justify-center overflow-hidden">
+            <img 
+              src={appLogo} 
+              alt="AFME STORE Logo" 
+              className="w-full h-full object-contain rounded-xl"
+              referrerPolicy="no-referrer"
+            />
           </div>
-          <div className="absolute -top-1 -right-1 bg-amber-400 text-white rounded-full p-1 border-2 border-white shadow-md relative z-20 animate-bounce">
+          <div className="absolute -bottom-1 -right-1 bg-amber-400 text-white rounded-full p-1 border-2 border-white shadow-md relative z-20 animate-bounce">
             <Sparkles size={11} />
           </div>
         </div>

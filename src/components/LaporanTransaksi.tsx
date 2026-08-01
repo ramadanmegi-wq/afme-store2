@@ -50,6 +50,7 @@ export default function LaporanTransaksi({
   const [searchProductQuery, setSearchProductQuery] = useState('');
   
   const handleStartEdit = (trx: Transaction) => {
+    if (!isAdminOrOwner) return;
     setEditingTransaction(JSON.parse(JSON.stringify(trx)));
     setSearchProductQuery('');
   };
@@ -182,7 +183,7 @@ export default function LaporanTransaksi({
   };
 
   const handleSaveTransactionEdit = async () => {
-    if (!editingTransaction || !onUpdateTransaction) return;
+    if (!isAdminOrOwner || !editingTransaction || !onUpdateTransaction) return;
     setIsSavingEdit(true);
     
     try {
@@ -287,6 +288,14 @@ export default function LaporanTransaksi({
     }));
   };
 
+  // Helper: Format local date to YYYY-MM-DD string without UTC shift
+  const getLocalDateString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // 1. Compile & Filter Raw Data (POS & Services)
   const allRawItems = useMemo(() => {
     const list: Array<{
@@ -306,8 +315,14 @@ export default function LaporanTransaksi({
 
     // Process POS Transactions
     transactions.forEach(tx => {
-      const txDate = tx.date ? new Date(tx.date) : new Date();
-      const dateStr = txDate.toISOString().split('T')[0];
+      let txDate = new Date();
+      if (tx.date) {
+        const parsed = new Date(tx.date);
+        if (!isNaN(parsed.getTime())) {
+          txDate = parsed;
+        }
+      }
+      const dateStr = getLocalDateString(txDate);
       const itemsSummary = tx.items.map(it => `${it.model} (${it.quantity}x)`).join(', ');
       const totalQty = tx.items.reduce((s, it) => s + it.quantity, 0);
 
@@ -331,15 +346,17 @@ export default function LaporanTransaksi({
     services.filter(s => s.status === 'selesai').forEach(s => {
       let svcDate = new Date();
       if (s.date) {
-        // Handle format YYYY-MM-DD
-        const parts = s.date.split('-');
-        if (parts.length === 3) {
-          svcDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const parsed = new Date(s.date);
+        if (!isNaN(parsed.getTime())) {
+          svcDate = parsed;
         } else {
-          svcDate = new Date(s.date);
+          const parts = s.date.split('-');
+          if (parts.length === 3 && parts[0].length === 4 && parts[2].length === 2) {
+            svcDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+          }
         }
       }
-      const dateStr = svcDate.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(svcDate);
 
       list.push({
         id: s.id,
@@ -348,7 +365,7 @@ export default function LaporanTransaksi({
         type: 'service',
         customerName: s.customerName || 'Pelanggan Jasa',
         customerPhone: s.customerPhone || '',
-        cashierName: 'Teknisi',
+        cashierName: s.cashierName || 'Teknisi',
         summaryText: `Reparasi ${s.devModel} (${s.description})`,
         amount: s.cost,
         profit: Math.max(0, s.cost - s.capitalCost),
@@ -530,6 +547,7 @@ export default function LaporanTransaksi({
           </head>
           <body>
             <div class="header">
+              <img src="${localStorage.getItem('afme_custom_logo') || window.location.origin + '/logo.png'}" alt="AFME STORE Logo" style="width: 48px; height: 48px; object-fit: contain; border-radius: 12px; background: #020617; border: 1px solid #f59e0b; padding: 2px; margin: 0 auto 8px auto; display: block;" />
               <h1>AFME STORE</h1>
               <p>Sistem Laporan Transaksi Resmi (${selectedTab.toUpperCase()})</p>
               <div class="period-badge">Periode: ${startDate || 'Mulai Awal'} s/d ${endDate || 'Hari Ini'}</div>
@@ -889,9 +907,9 @@ export default function LaporanTransaksi({
                                     {formatIDR(item.profit)}
                                   </td>
                                 </>
-                              )}
-                              <td className="py-3 px-4 text-center whitespace-nowrap">
-                                {item.type === 'pos' ? (
+                               )}
+                               <td className="py-3 px-4 text-center whitespace-nowrap">
+                                {isAdminOrOwner && item.type === 'pos' ? (
                                   <button
                                     onClick={() => handleStartEdit(item.originalData)}
                                     className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded-lg text-[10.5px] font-extrabold transition cursor-pointer border border-amber-200"
@@ -900,6 +918,8 @@ export default function LaporanTransaksi({
                                     <Pencil size={11} />
                                     <span>Edit/Redo</span>
                                   </button>
+                                ) : item.type === 'pos' ? (
+                                  <span className="text-[10px] text-slate-400 italic font-medium">Laporan POS</span>
                                 ) : (
                                   <span className="text-[10px] text-slate-400 italic font-medium">Servis Selesai</span>
                                 )}
@@ -932,7 +952,7 @@ export default function LaporanTransaksi({
       {/* ========================================================= */}
       {/* EDIT / REDO TRANSACTION MODAL                             */}
       {/* ========================================================= */}
-      {editingTransaction && (
+      {editingTransaction && isAdminOrOwner && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-scaleUp">
             
@@ -963,7 +983,7 @@ export default function LaporanTransaksi({
                 {/* 1. Customer Information */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
                   <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                    Informasi Pelanggan &amp; Nota
+                    Informasi Pelanggan &amp; Nota Transaksi
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -981,6 +1001,29 @@ export default function LaporanTransaksi({
                         type="text"
                         value={editingTransaction.customerPhone}
                         onChange={(e) => setEditingTransaction({ ...editingTransaction, customerPhone: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1">Kasir / Staff Petugas</label>
+                      <input 
+                        type="text"
+                        value={editingTransaction.cashierName || ''}
+                        onChange={(e) => setEditingTransaction({ ...editingTransaction, cashierName: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-indigo-500"
+                        placeholder="Nama Staff Kasir..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1">Waktu Transaksi</label>
+                      <input 
+                        type="datetime-local"
+                        value={editingTransaction.date ? new Date(new Date(editingTransaction.date).getTime() - new Date(editingTransaction.date).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setEditingTransaction({ ...editingTransaction, date: new Date(e.target.value).toISOString() });
+                          }
+                        }}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-indigo-500"
                       />
                     </div>

@@ -27,6 +27,7 @@ export interface Product {
   sellingPrice: number; // Harga jual
   status: 'available' | 'sold';
   stock?: number; // Khusus aksesoris (jumlah stok)
+  purchaserName?: string; // Nama penanggung jawab / pembeli stok barang
 }
 
 export interface TradeInItem {
@@ -72,6 +73,7 @@ export interface Service {
   date: string;
   sparepartId?: string; // Id sparepart dari inventori (jika ada)
   sparepartName?: string; // Menyimpan nama sparepart saat dipilih
+  cashierName?: string; // Nama kasir/staff petugas yang menangani service
 }
 
 export interface Sparepart {

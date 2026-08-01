@@ -9,7 +9,8 @@ import {
   EyeOff, 
   RotateCcw, 
   Package,
-  AlertCircle
+  AlertCircle,
+  UserCheck
 } from 'lucide-react';
 import { Product, ProductType, UserRole } from '../types';
 
@@ -19,6 +20,7 @@ interface IPhoneStockProps {
   onSaveProduct: (product: Product) => void;
   onDeleteProduct: (id: string) => void;
   typeFilter?: 'iphone' | 'aksesoris';
+  currentUserName?: string;
 }
 
 export default function IPhoneStock({
@@ -27,6 +29,7 @@ export default function IPhoneStock({
   onSaveProduct,
   onDeleteProduct,
   typeFilter,
+  currentUserName,
 }: IPhoneStockProps) {
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,6 +50,7 @@ export default function IPhoneStock({
   const [sellingPrice, setSellingPrice] = useState<number>(0);
   const [status, setStatus] = useState<'available' | 'sold'>('available');
   const [stock, setStock] = useState<number>(1);
+  const [purchaserName, setPurchaserName] = useState<string>('');
 
   // Format IDR
   const formatIDR = (num: number) => {
@@ -61,7 +65,8 @@ export default function IPhoneStock({
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.model.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (p.imei && p.imei.includes(searchTerm)) ||
-                          (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+                          (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (p.purchaserName && p.purchaserName.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesType = typeFilter ? p.type === typeFilter : (filterType === 'all' || p.type === filterType);
     const matchesStatus = filterStatus === 'all' || p.status === filterStatus;
     return matchesSearch && matchesType && matchesStatus;
@@ -79,6 +84,7 @@ export default function IPhoneStock({
     setSellingPrice(0);
     setStatus('available');
     setStock(1);
+    setPurchaserName(currentUserName || '');
     setIsFormOpen(true);
   };
 
@@ -94,6 +100,7 @@ export default function IPhoneStock({
     setSellingPrice(p.sellingPrice);
     setStatus(p.status);
     setStock(p.stock || 1);
+    setPurchaserName(p.purchaserName || '');
     setIsFormOpen(true);
   };
 
@@ -113,6 +120,7 @@ export default function IPhoneStock({
       sellingPrice: Number(sellingPrice),
       status,
       stock: type === 'aksesoris' ? Number(stock) : undefined,
+      purchaserName: purchaserName.trim() || undefined,
     };
 
     onSaveProduct(newProduct);
@@ -255,6 +263,21 @@ export default function IPhoneStock({
               </div>
             )}
 
+            {/* Field: Purchaser Name (Tracking Belanja Stok) */}
+            <div className="md:col-span-1">
+              <label className="block text-[10px] text-amber-700 font-bold mb-1 uppercase flex items-center gap-1">
+                <UserCheck size={11} className="text-amber-600" />
+                Nama Pembeli / Belanja Stok
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Budi, Pak Haji, Mas Rian"
+                value={purchaserName}
+                onChange={(e) => setPurchaserName(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:border-amber-500 rounded-xl text-xs text-slate-800 font-medium focus:outline-none"
+              />
+            </div>
+
             {/* Field: Stock quantity (For accessories only) */}
             {type === 'aksesoris' && (
               <>
@@ -314,7 +337,7 @@ export default function IPhoneStock({
             </span>
             <input
               type="text"
-              placeholder="Cari model barang atau IMEI..."
+              placeholder="Cari model, IMEI, SKU, atau pembeli stok..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 transition focus:outline-none"
@@ -413,6 +436,12 @@ export default function IPhoneStock({
                       )}
                       {p.imei && (
                         <p className="text-[10px] text-slate-500 font-mono mt-0.5">IMEI: {p.imei}</p>
+                      )}
+                      {p.purchaserName && (
+                        <p className="text-[10px] text-amber-800 font-semibold mt-1 inline-flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60" title="Penanggung jawab / pembeli stok">
+                          <UserCheck size={10} className="text-amber-600 shrink-0" />
+                          <span>Dibelanja oleh: <strong className="font-extrabold text-amber-900">{p.purchaserName}</strong></span>
+                        </p>
                       )}
                     </td>
 

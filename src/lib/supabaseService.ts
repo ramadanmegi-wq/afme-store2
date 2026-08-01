@@ -465,6 +465,13 @@ export async function deleteAppAccount(id: string): Promise<void> {
 export async function getProductsFromSupabase(): Promise<Product[]> {
   if (!isSupabaseConfigured) return [];
   try {
+    let localPurchaserMaps: Record<string, string> = {};
+    try {
+      localPurchaserMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
+    } catch (e) {
+      console.error('Gagal mengambil prod_purchaser_maps:', e);
+    }
+
     // 1. Get HP from 'products'
     const { data: hpData, error: hpErr } = await supabase
       .from('products')
@@ -505,7 +512,8 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
         repairCost,
         sellingPrice,
         status: isAvailable ? 'available' : 'sold',
-        condition: p.kondisi || p.condition || 'Second'
+        condition: p.kondisi || p.condition || 'Second',
+        purchaserName: p.purchaser_name || p.pembeli_stok || p.purchaserName || localPurchaserMaps[p.id] || ''
       };
     });
 
@@ -531,7 +539,8 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
         repairCost: 0,
         sellingPrice,
         status: stock > 0 ? 'available' : 'sold',
-        stock
+        stock,
+        purchaserName: a.purchaser_name || a.pembeli_stok || a.purchaserName || localPurchaserMaps[a.id] || ''
       };
     });
 
@@ -545,6 +554,16 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
 export async function saveProductToSupabase(prod: Product): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
+    if (prod.purchaserName) {
+      try {
+        const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
+        localMaps[prod.id] = prod.purchaserName;
+        localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
+      } catch (e) {
+        console.error('Gagal menyimpan prod_purchaser_maps:', e);
+      }
+    }
+
     const isIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id);
 
     if (prod.type === 'iphone') {
@@ -566,7 +585,8 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         biaya_perbaikan: prod.repairCost || 0,
         harga_jual: prod.sellingPrice,
         stok: prod.status === 'available' ? 1 : 0,
-        kondisi: prod.model.toLowerCase().includes('baru') ? 'Baru' : 'Second'
+        kondisi: prod.model.toLowerCase().includes('baru') ? 'Baru' : 'Second',
+        purchaser_name: prod.purchaserName || null
       };
 
       const payloadFallback = {
@@ -892,9 +912,9 @@ export async function getTransactionsFromSupabase(): Promise<Transaction[]> {
       const finalCustomerPhone = (sale.customer_phone && sale.customer_phone !== '08123456789') 
         ? sale.customer_phone 
         : (matchedLocal.customerPhone || '08123456789');
-      const finalCashierName = (sale.cashier_name && sale.cashier_name !== 'Staff AFME') 
+      const finalCashierName = sale.cashier_name 
         ? sale.cashier_name 
-        : (matchedLocal.cashierName || 'Staff AFME');
+        : (matchedLocal.cashierName || 'Staff Kasir');
 
       return {
         id: sale.id,
@@ -936,7 +956,7 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
       metode_pembayaran: 'Tunai',
       customer_name: trx.customerName || 'Pelanggan Umum',
       customer_phone: trx.customerPhone || '08123456789',
-      cashier_name: trx.cashierName || 'Staff AFME'
+      cashier_name: trx.cashierName || 'Staff Kasir'
     };
 
     let { data: saleData, error: saleErr } = await supabase
@@ -973,13 +993,13 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
       localMaps[saleData.id] = {
         customerName: trx.customerName,
         customerPhone: trx.customerPhone,
-        cashierName: trx.cashierName || 'Staff AFME'
+        cashierName: trx.cashierName || 'Staff Kasir'
       };
       if (orderNo) {
         localMaps[orderNo] = {
           customerName: trx.customerName,
           customerPhone: trx.customerPhone,
-          cashierName: trx.cashierName || 'Staff AFME'
+          cashierName: trx.cashierName || 'Staff Kasir'
         };
       }
       localStorage.setItem('trx_customer_maps', JSON.stringify(localMaps));
@@ -1141,7 +1161,7 @@ export async function updateTransactionInSupabase(updatedTrx: Transaction): Prom
       localMaps[updatedTrx.id] = {
         customerName: updatedTrx.customerName,
         customerPhone: updatedTrx.customerPhone,
-        cashierName: updatedTrx.cashierName || 'Staff AFME'
+        cashierName: updatedTrx.cashierName || 'Staff Kasir'
       };
       localStorage.setItem('trx_customer_maps', JSON.stringify(localMaps));
     } catch (e) {

@@ -11,7 +11,10 @@ import {
   Plus, 
   Edit2,
   Wifi,
-  WifiOff
+  WifiOff,
+  Upload,
+  Image as ImageIcon,
+  RotateCcw
 } from 'lucide-react';
 import { AppAccount, UserRole } from '../types';
 import { getAccounts, saveAccount, deleteAccount } from '../db/mockDb';
@@ -28,11 +31,22 @@ interface PengaturanProps {
   onResetDb: () => void;
   currentUserUsername: string;
   onUserUpdated?: (updatedAcc: AppAccount) => void;
+  appLogo?: string;
+  onLogoChange?: (newLogo: string) => void;
 }
 
-export default function Pengaturan({ activeRole, onResetDb, currentUserUsername, onUserUpdated }: PengaturanProps) {
+export default function Pengaturan({ 
+  activeRole, 
+  onResetDb, 
+  currentUserUsername, 
+  onUserUpdated,
+  appLogo = '/logo.png',
+  onLogoChange
+}: PengaturanProps) {
   const [accounts, setAccounts] = useState<AppAccount[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [logoPreview, setLogoPreview] = useState<string>(appLogo);
+  const [logoMsg, setLogoMsg] = useState<string>('');
   
   // Form states for adding/editing user
   const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -77,6 +91,44 @@ export default function Pengaturan({ activeRole, onResetDb, currentUserUsername,
   useEffect(() => {
     loadAccountsData();
   }, []);
+
+  useEffect(() => {
+    setLogoPreview(appLogo);
+  }, [appLogo]);
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.includes('image/')) {
+      setLogoMsg('File harus berupa gambar format JPG, PNG, atau WEBP!');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoMsg('Ukuran file maksimal 5MB!');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setLogoPreview(result);
+      localStorage.setItem('afme_custom_logo', result);
+      if (onLogoChange) onLogoChange(result);
+      setLogoMsg('Logo toko berhasil diperbarui!');
+      setTimeout(() => setLogoMsg(''), 4000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = () => {
+    localStorage.removeItem('afme_custom_logo');
+    setLogoPreview('/logo.png');
+    if (onLogoChange) onLogoChange('/logo.png');
+    setLogoMsg('Logo dikembalikan ke default AFME Store!');
+    setTimeout(() => setLogoMsg(''), 4000);
+  };
 
   const handleResetForm = () => {
     setIsEditing(false);
@@ -439,9 +491,66 @@ export default function Pengaturan({ activeRole, onResetDb, currentUserUsername,
 
         </div>
         
-        {/* RIGHT COLUMN: Form to add / edit User account (4 cols) */}
-        <div className="lg:col-span-4">
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 md:p-6 sticky top-6 shadow-sm">
+        {/* RIGHT COLUMN: Form to add / edit User account & Logo Branding (4 cols) */}
+        <div className="lg:col-span-4 space-y-6">
+
+          {/* Logo Branding Customization Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 md:p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+              <ImageIcon className="text-indigo-600" size={16} />
+              <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">
+                Pengaturan Logo AFME Store
+              </h3>
+            </div>
+
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-2xl bg-slate-950 p-1.5 border-2 border-amber-400/40 shadow-lg shadow-slate-950/20 flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105">
+                  <img 
+                    src={logoPreview} 
+                    alt="Logo Toko" 
+                    className="w-full h-full object-contain rounded-xl"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-800">Logo Aktif Sistem</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Dapat diganti dengan file foto / logo Anda sendiri (JPG, PNG)</p>
+              </div>
+
+              {logoMsg && (
+                <div className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl w-full">
+                  {logoMsg}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 w-full pt-1">
+                <label className="cursor-pointer w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md">
+                  <Upload size={14} />
+                  <span>Upload Logo Sendiri (JPG/PNG)</span>
+                  <input 
+                    type="file" 
+                    accept="image/png, image/jpeg, image/jpg, image/webp" 
+                    className="hidden" 
+                    onChange={handleLogoFileUpload}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleResetLogo}
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-xl text-[11px] font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw size={12} />
+                  <span>Reset ke Logo AFME Default</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 md:p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <UserPlus className="text-indigo-600" size={16} />
               <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">

@@ -464,9 +464,15 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
             
             {/* Dynamic Paper Receipt Layout (Premium Off-white Struk) */}
             <div id="print-receipt-area" className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-left text-xs font-mono text-slate-800 space-y-4">
-              <div className="text-center border-b border-slate-250 pb-3">
-                <p className="font-extrabold text-slate-900 text-sm">AFM STORE RECEIPT</p>
-                <p className="text-slate-500 text-[10px]">Pusat iPhone Bekas & Jasa Servis</p>
+              <div className="text-center border-b border-slate-250 pb-3 flex flex-col items-center">
+                <img 
+                  src={localStorage.getItem('afme_custom_logo') || '/logo.png'} 
+                  alt="AFM STORE Logo" 
+                  className="w-12 h-12 object-contain rounded-xl bg-slate-950 p-1 border border-amber-400/40 shadow-sm mb-2"
+                  referrerPolicy="no-referrer"
+                />
+                <p className="font-extrabold text-slate-900 text-sm tracking-tight">AFM STORE RECEIPT</p>
+                <p className="text-slate-500 text-[10px]">Pusat iPhone Bekas &amp; Jasa Servis</p>
                 <p className="text-[10px] mt-1 text-slate-600">{new Date(lastTrx.date).toLocaleString('id-ID')}</p>
               </div>
 

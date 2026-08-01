@@ -111,6 +111,11 @@ export default function App() {
     return 'karyawan';
   });
 
+  // App Logo State (Custom upload or default AFME Store logo)
+  const [appLogo, setAppLogo] = useState<string>(() => {
+    return localStorage.getItem('afme_custom_logo') || '/logo.png';
+  });
+
   // Database reactive states
   const [products, setProducts] = useState<Product[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -575,6 +580,7 @@ export default function App() {
       {/* 0. User Account Lock Screen Overlay with Session Management */}
       {!isUnlocked && (
         <PinLockModal 
+          appLogo={appLogo}
           onUnlock={(unlockedAccount) => {
             setCurrentUser(unlockedAccount);
             setActiveRole(unlockedAccount.role);
@@ -588,12 +594,15 @@ export default function App() {
       )}
       
       {/* 1. Mobile Header bar (Premium Light themed) */}
-      <header className="md:hidden bg-white border-b border-slate-200 text-slate-800 px-5 py-4 flex justify-between items-center z-40 shadow-sm sticky top-0">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-sm tracking-widest text-white shadow-md shadow-indigo-600/20">
-            AF
-          </div>
-          <span className="font-bold tracking-tight text-base text-slate-900">AFM STORE</span>
+      <header className="md:hidden bg-white border-b border-slate-200 text-slate-800 px-5 py-3.5 flex justify-between items-center z-40 shadow-sm sticky top-0">
+        <div className="flex items-center gap-2.5">
+          <img 
+            src={appLogo} 
+            alt="AFM STORE Logo" 
+            className="w-9 h-9 rounded-xl object-contain bg-slate-950 p-0.5 border border-amber-400/30 shadow-sm"
+            referrerPolicy="no-referrer"
+          />
+          <span className="font-extrabold tracking-tight text-base text-slate-900">AFM STORE</span>
         </div>
         
         <button 
@@ -616,12 +625,15 @@ export default function App() {
           {/* Brand header */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-lg shadow-indigo-600/35">
-                AF
-              </div>
+              <img 
+                src={appLogo} 
+                alt="AFM STORE Logo" 
+                className="w-11 h-11 rounded-2xl object-contain bg-slate-950 p-1 border border-amber-400/40 shadow-md shadow-slate-900/10"
+                referrerPolicy="no-referrer"
+              />
               <div>
                 <h1 className="font-extrabold text-slate-900 text-sm tracking-tight leading-none">AFM STORE</h1>
-                <span className="text-[10px] text-slate-500 font-medium mt-1 block">V2 Pro • Supabase Server</span>
+                <span className="text-[10px] text-slate-500 font-medium mt-1 block">Sales &amp; Service • Cloud POS</span>
               </div>
             </div>
             
@@ -945,7 +957,7 @@ export default function App() {
               <POS
                 products={products}
                 activeRole={activeRole}
-                cashierName={currentUser?.name || `${activeRole.toUpperCase()} Toko`}
+                cashierName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
                 onCheckout={handleCheckoutTransaction}
                 customers={customers}
               />
@@ -958,6 +970,7 @@ export default function App() {
                 typeFilter="iphone"
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}
+                currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />
             )}
 
@@ -968,6 +981,7 @@ export default function App() {
                 typeFilter="aksesoris"
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}
+                currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />
             )}
 
@@ -975,6 +989,7 @@ export default function App() {
               <ServiceHP
                 services={services}
                 activeRole={activeRole}
+                cashierName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
                 spareparts={spareparts}
                 onSaveService={handleSaveService}
                 onDeleteService={handleDeleteService}
@@ -1035,6 +1050,11 @@ export default function App() {
                 activeRole={activeRole}
                 onResetDb={handleResetDatabase}
                 currentUserUsername={currentUser?.username || ''}
+                appLogo={appLogo}
+                onLogoChange={(newLogo) => {
+                  setAppLogo(newLogo);
+                  triggerToast('Logo Toko berhasil diperbarui!', 'success');
+                }}
                 onUserUpdated={(updatedAcc) => {
                   setCurrentUser(updatedAcc);
                   setActiveRole(updatedAcc.role);

@@ -86,6 +86,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 200000,
     sellingPrice: 4200000,
     status: 'available',
+    purchaserName: 'Admin AFME',
   },
   {
     id: 'prod-2',
@@ -96,6 +97,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 500000,
     sellingPrice: 8500000,
     status: 'available',
+    purchaserName: 'Rian (Owner)',
   },
   {
     id: 'prod-3',
@@ -106,6 +108,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 0,
     sellingPrice: 10200000,
     status: 'sold',
+    purchaserName: 'Admin AFME',
   },
   {
     id: 'prod-4',

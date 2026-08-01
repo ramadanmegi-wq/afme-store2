@@ -18,6 +18,7 @@ import { Service, UserRole, Sparepart, Customer } from '../types';
 interface ServiceHPProps {
   services: Service[];
   activeRole: UserRole;
+  cashierName?: string;
   spareparts?: Sparepart[];
   onSaveService: (service: Service) => void;
   onDeleteService: (id: string) => void;
@@ -27,6 +28,7 @@ interface ServiceHPProps {
 export default function ServiceHP({
   services,
   activeRole,
+  cashierName,
   spareparts = [],
   onSaveService,
   onDeleteService,
@@ -153,6 +155,8 @@ export default function ServiceHP({
       }
     }
 
+    const existingSrv = editingId ? services.find(s => s.id === editingId) : null;
+
     const newService: Service = {
       id: editingId || `srv-${Date.now()}`,
       customerName: customerName.trim(),
@@ -163,9 +167,10 @@ export default function ServiceHP({
       status,
       cost: Number(cost),
       capitalCost: finalCapitalCost,
-      date: editingId ? services.find(s => s.id === editingId)?.date || new Date().toISOString() : new Date().toISOString(),
+      date: existingSrv?.date || new Date().toISOString(),
       sparepartId: sparepartId || undefined,
-      sparepartName: selectedSp ? selectedSp.name : undefined
+      sparepartName: selectedSp ? selectedSp.name : undefined,
+      cashierName: cashierName || existingSrv?.cashierName || 'Staff Service'
     };
 
     onSaveService(newService);
