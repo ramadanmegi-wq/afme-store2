@@ -20,7 +20,8 @@ import {
   CloudLightning,
   CheckCircle2,
   AlertCircle,
-  FileText
+  FileText,
+  Target
 } from 'lucide-react';
 
 // Type definitions
@@ -83,6 +84,7 @@ import LaporanTransaksi from './components/LaporanTransaksi';
 import SparepartsInventory from './components/SparepartsInventory';
 import PinLockModal from './components/PinLockModal';
 import Pengaturan from './components/Pengaturan';
+import TrackingKaryawan from './components/TrackingKaryawan';
 
 export default function App() {
   // Mobile navigation drawer toggle
@@ -722,6 +724,21 @@ export default function App() {
                   <Package size={14} />
                   <span>Stok Aksesoris</span>
                 </button>
+
+                {/* Tab: Target & Tracking Karyawan (Khusus Owner & Admin) */}
+                {(activeRole === 'owner' || activeRole === 'admin') && (
+                  <button
+                    onClick={() => { setActiveTab('tracking_karyawan'); setIsMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'tracking_karyawan'
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15 border border-indigo-500/20'
+                        : 'hover:bg-slate-50 text-slate-650 hover:text-slate-900'
+                    }`}
+                  >
+                    <Target size={14} />
+                    <span>Target &amp; Tracking Karyawan</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -981,6 +998,15 @@ export default function App() {
                 typeFilter="aksesoris"
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}
+                currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
+              />
+            )}
+
+            {activeTab === 'tracking_karyawan' && (
+              <TrackingKaryawan
+                transactions={transactions}
+                products={products}
+                activeRole={activeRole}
                 currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />
             )}

@@ -265,13 +265,35 @@ export default function IPhoneStock({
 
             {/* Field: Purchaser Name (Tracking Belanja Stok) */}
             <div className="md:col-span-1">
-              <label className="block text-[10px] text-amber-700 font-bold mb-1 uppercase flex items-center gap-1">
-                <UserCheck size={11} className="text-amber-600" />
-                Nama Pembeli / Belanja Stok
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] text-amber-800 font-bold uppercase flex items-center gap-1">
+                  <UserCheck size={11} className="text-amber-600" />
+                  Penanggung Jawab Belanja Stok
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPurchaserName('Aldi')}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold cursor-pointer transition ${
+                      purchaserName === 'Aldi' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                    }`}
+                  >
+                    + Aldi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPurchaserName('Friya')}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold cursor-pointer transition ${
+                      purchaserName === 'Friya' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                    }`}
+                  >
+                    + Friya
+                  </button>
+                </div>
+              </div>
               <input
                 type="text"
-                placeholder="Contoh: Budi, Pak Haji, Mas Rian"
+                placeholder="Pilih preset di atas atau ketik nama (Contoh: Aldi, Friya)"
                 value={purchaserName}
                 onChange={(e) => setPurchaserName(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:border-amber-500 rounded-xl text-xs text-slate-800 font-medium focus:outline-none"
