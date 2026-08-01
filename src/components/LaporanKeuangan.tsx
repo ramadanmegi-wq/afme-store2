@@ -48,6 +48,7 @@ interface LaporanKeuanganProps {
   onAddExpense: (expense: Omit<OperationalExpense, 'id'>) => void;
   onDeleteExpense: (id: string) => void;
   onUpdateTransaction?: (updatedTrx: Transaction) => void;
+  onOpenLaporanTransaksi?: () => void;
 }
 
 export default function LaporanKeuangan({
@@ -59,7 +60,8 @@ export default function LaporanKeuangan({
   spareparts = [],
   onAddExpense,
   onDeleteExpense,
-  onUpdateTransaction
+  onUpdateTransaction,
+  onOpenLaporanTransaksi
 }: LaporanKeuanganProps) {
   // Filters State
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'year' | 'all' | 'custom'>('all');
@@ -515,6 +517,19 @@ export default function LaporanKeuangan({
           <span className="font-semibold text-slate-700 block mb-1">Mengapa dibatasi?</span>
           Hal ini menjaga kerahasiaan profit margin toko, perhitungan modal awal pembelian HP, serta catatan profit sharing sehingga staf (Karyawan) berfokus pada kasir POS & input service.
         </div>
+
+        {onOpenLaporanTransaksi && (
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <p className="text-xs text-slate-600 font-semibold mb-3">Mencari riwayat transaksi kasir, nota POS, atau cetak ulang faktur?</p>
+            <button
+              onClick={() => onOpenLaporanTransaksi()}
+              className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 mx-auto cursor-pointer"
+            >
+              <FileText size={15} />
+              <span>Buka Laporan &amp; Riwayat Transaksi (POS &amp; Service)</span>
+            </button>
+          </div>
+        )}
       </div>
     );
   }

@@ -8,7 +8,10 @@ import {
   ShieldAlert, 
   Clock, 
   CheckCircle, 
-  Activity
+  Activity,
+  FileText,
+  ShoppingCart,
+  Briefcase
 } from 'lucide-react';
 import { Product, Transaction, Service, Customer, UserRole } from '../types';
 import {

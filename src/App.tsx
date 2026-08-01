@@ -783,27 +783,41 @@ export default function App() {
                 {/* Tab: Laporan Keuangan */}
                 <button
                   onClick={() => { setActiveTab('laporan_keuangan'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeTab === 'laporan_keuangan'
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15 border border-indigo-500/20'
                       : 'hover:bg-slate-50 text-slate-650 hover:text-slate-900'
                   }`}
                 >
-                  <Briefcase size={14} />
-                  <span>Laporan Keuangan</span>
+                  <div className="flex items-center gap-3">
+                    <Briefcase size={14} />
+                    <span>Laporan Keuangan</span>
+                  </div>
+                  {activeRole === 'karyawan' && (
+                    <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-semibold">Admin</span>
+                  )}
                 </button>
 
                 {/* Tab: Laporan Transaksi */}
                 <button
                   onClick={() => { setActiveTab('laporan_transaksi'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeTab === 'laporan_transaksi'
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15 border border-indigo-500/20'
                       : 'hover:bg-slate-50 text-slate-650 hover:text-slate-900'
                   }`}
                 >
-                  <FileText size={14} />
-                  <span>Laporan Transaksi</span>
+                  <div className="flex items-center gap-3">
+                    <FileText size={14} />
+                    <span>Laporan Transaksi</span>
+                  </div>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold ${
+                    activeTab === 'laporan_transaksi' 
+                      ? 'bg-indigo-700 text-white border border-indigo-400' 
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    POS &amp; Service
+                  </span>
                 </button>
               </div>
             </div>
@@ -920,7 +934,18 @@ export default function App() {
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">AFM STORE CLOUD POS</p>
               <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight capitalize mt-1 flex items-center gap-2">
-                {activeTab.replace('_', ' ')} Panel
+                {activeTab === 'laporan_transaksi' ? 'Laporan & Riwayat Transaksi' :
+                 activeTab === 'laporan_keuangan' ? 'Laporan Keuangan & Buku Kas' :
+                 activeTab === 'pos' ? 'POS Kasir Penjualan' :
+                 activeTab === 'stok_hp' ? 'Stok HP Second' :
+                 activeTab === 'stok_aksesoris' ? 'Stok Aksesoris' :
+                 activeTab === 'service_hp' ? 'Jasa Service HP' :
+                 activeTab === 'stok_spareparts' ? 'Stok Spareparts' :
+                 activeTab === 'tracking_karyawan' ? 'Target & Tracking Karyawan' :
+                 activeTab === 'customer_roster' ? 'Direktori Pelanggan' :
+                 activeTab === 'supabase_sync' ? 'Panduan Supabase Cloud' :
+                 activeTab === 'pengaturan' ? 'Konfigurasi Sistem' :
+                 `${activeTab.replace('_', ' ')} Panel`}
                 {isLoading && <LoaderCircleSpinner />}
               </h2>
             </div>
@@ -1053,6 +1078,7 @@ export default function App() {
                 onAddExpense={handleAddExpense}
                 onDeleteExpense={handleDeleteExpense}
                 onUpdateTransaction={handleUpdateTransaction}
+                onOpenLaporanTransaksi={() => setActiveTab('laporan_transaksi')}
               />
             )}
 
