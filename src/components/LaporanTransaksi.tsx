@@ -19,7 +19,8 @@ import {
   Minus,
   X,
   Check,
-  RefreshCw
+  RefreshCw,
+  User
 } from 'lucide-react';
 import { Transaction, Service, UserRole, Product } from '../types';
 
@@ -258,15 +259,33 @@ export default function LaporanTransaksi({
     }).slice(0, 5);
   }, [products, searchProductQuery]);
   
-  // Date filter range state
-  const [startDate, setStartDate] = useState<string>(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 2); // default show last 2 months
-    return d.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  // Helper: Safely parse date string or Date instance without timezone skew
+  const parseDateString = (dateInput: any): Date => {
+    if (!dateInput) return new Date();
+    if (dateInput instanceof Date) return dateInput;
+    const str = String(dateInput).trim();
+    if (!str) return new Date();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      const [y, m, d] = str.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) return parsed;
+    return new Date();
+  };
+
+  // Helper: Format local date to YYYY-MM-DD string without UTC shift
+  const getLocalDateString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Date filter range state (default empty to show ALL transactions by default)
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [filterCashier, setFilterCashier] = useState<string>('semua');
 
   // Track expanded groups (e.g. specific date, specific week, specific month)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -288,12 +307,26 @@ export default function LaporanTransaksi({
     }));
   };
 
-  // Helper: Format local date to YYYY-MM-DD string without UTC shift
-  const getLocalDateString = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  // Quick Date Filter Handlers
+  const handleSetQuickDate = (mode: 'all' | 'today' | 'week' | 'month') => {
+    const now = new Date();
+    if (mode === 'all') {
+      setStartDate('');
+      setEndDate('');
+    } else if (mode === 'today') {
+      const todayStr = getLocalDateString(now);
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    } else if (mode === 'week') {
+      const past = new Date();
+      past.setDate(now.getDate() - 7);
+      setStartDate(getLocalDateString(past));
+      setEndDate(getLocalDateString(now));
+    } else if (mode === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDate(getLocalDateString(firstDay));
+      setEndDate(getLocalDateString(now));
+    }
   };
 
   // 1. Compile & Filter Raw Data (POS & Services)
@@ -314,17 +347,14 @@ export default function LaporanTransaksi({
     }> = [];
 
     // Process POS Transactions
-    transactions.forEach(tx => {
-      let txDate = new Date();
-      if (tx.date) {
-        const parsed = new Date(tx.date);
-        if (!isNaN(parsed.getTime())) {
-          txDate = parsed;
-        }
-      }
+    (transactions || []).forEach(tx => {
+      const txDate = parseDateString(tx.date);
       const dateStr = getLocalDateString(txDate);
-      const itemsSummary = tx.items.map(it => `${it.model} (${it.quantity}x)`).join(', ');
-      const totalQty = tx.items.reduce((s, it) => s + it.quantity, 0);
+      const itemsList = tx.items || [];
+      const itemsSummary = itemsList.length > 0
+        ? itemsList.map(it => `${it.model || 'Barang'} (${it.quantity || 1}x)`).join(', ')
+        : 'Pembelian Barang';
+      const totalQty = itemsList.reduce((s, it) => s + (it.quantity || 1), 0);
 
       list.push({
         id: tx.id,
@@ -334,29 +364,19 @@ export default function LaporanTransaksi({
         customerName: tx.customerName || 'Pelanggan Umum',
         customerPhone: tx.customerPhone || '',
         cashierName: tx.cashierName || 'Kasir',
-        summaryText: itemsSummary || 'Pembelian Barang',
-        amount: tx.totalAmount,
-        profit: tx.totalProfit,
+        summaryText: itemsSummary,
+        amount: tx.totalAmount || 0,
+        profit: tx.totalProfit || 0,
         itemsCount: totalQty,
         originalData: tx
       });
     });
 
-    // Process Services (Selesai)
-    services.filter(s => s.status === 'selesai').forEach(s => {
-      let svcDate = new Date();
-      if (s.date) {
-        const parsed = new Date(s.date);
-        if (!isNaN(parsed.getTime())) {
-          svcDate = parsed;
-        } else {
-          const parts = s.date.split('-');
-          if (parts.length === 3 && parts[0].length === 4 && parts[2].length === 2) {
-            svcDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-          }
-        }
-      }
+    // Process Services (Include all services)
+    (services || []).forEach(s => {
+      const svcDate = parseDateString(s.date);
       const dateStr = getLocalDateString(svcDate);
+      const statusNote = s.status === 'selesai' ? '' : ` [${(s.status || 'proses').toUpperCase()}]`;
 
       list.push({
         id: s.id,
@@ -366,9 +386,9 @@ export default function LaporanTransaksi({
         customerName: s.customerName || 'Pelanggan Jasa',
         customerPhone: s.customerPhone || '',
         cashierName: s.cashierName || 'Teknisi',
-        summaryText: `Reparasi ${s.devModel} (${s.description})`,
-        amount: s.cost,
-        profit: Math.max(0, s.cost - s.capitalCost),
+        summaryText: `Reparasi ${s.devModel || 'HP'} (${s.description || 'Jasa'})${statusNote}`,
+        amount: s.cost || 0,
+        profit: Math.max(0, (s.cost || 0) - (s.capitalCost || 0)),
         itemsCount: 1,
         originalData: s
       });
@@ -378,7 +398,18 @@ export default function LaporanTransaksi({
     return list.sort((a, b) => b.fullDate.getTime() - a.fullDate.getTime());
   }, [transactions, services]);
 
-  // Apply Search and Date range filters
+  // Unique list of Cashiers/Staff inputters
+  const uniqueCashiers = useMemo(() => {
+    const set = new Set<string>();
+    allRawItems.forEach(item => {
+      if (item.cashierName && item.cashierName.trim()) {
+        set.add(item.cashierName.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [allRawItems]);
+
+  // Apply Search, Type, Cashier, and Date range filters
   const filteredRawItems = useMemo(() => {
     return allRawItems.filter(item => {
       // Date range filter
@@ -388,6 +419,9 @@ export default function LaporanTransaksi({
       // Type filter
       if (filterType === 'pos' && item.type !== 'pos') return false;
       if (filterType === 'service' && item.type !== 'service') return false;
+
+      // Cashier / Staff filter
+      if (filterCashier !== 'semua' && item.cashierName !== filterCashier) return false;
 
       // Search query filter
       if (searchQuery.trim() !== '') {
@@ -401,7 +435,7 @@ export default function LaporanTransaksi({
 
       return true;
     });
-  }, [allRawItems, startDate, endDate, filterType, searchQuery]);
+  }, [allRawItems, startDate, endDate, filterType, filterCashier, searchQuery]);
 
   // Helper: Get ISO week number and year
   const getWeekIdentifier = (date: Date) => {
@@ -675,8 +709,35 @@ export default function LaporanTransaksi({
             </button>
           </div>
 
-          {/* Quick Date Inputs */}
+          {/* Quick Date Preset & Date Inputs */}
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl font-medium text-slate-600 text-[11px]">
+              <button
+                onClick={() => handleSetQuickDate('all')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer ${!startDate && !endDate ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'hover:text-slate-900'}`}
+              >
+                Semua
+              </button>
+              <button
+                onClick={() => handleSetQuickDate('today')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer ${startDate && startDate === endDate ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'hover:text-slate-900'}`}
+              >
+                Hari Ini
+              </button>
+              <button
+                onClick={() => handleSetQuickDate('week')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer ${startDate && startDate !== endDate ? 'bg-white text-indigo-700 font-bold shadow-xs' : 'hover:text-slate-900'}`}
+              >
+                7 Hari
+              </button>
+              <button
+                onClick={() => handleSetQuickDate('month')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer hover:text-slate-900`}
+              >
+                Bulan Ini
+              </button>
+            </div>
+
             <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1.5 rounded-xl">
               <Calendar size={13} className="text-slate-400" />
               <span className="font-semibold">Mulai:</span>
@@ -700,8 +761,8 @@ export default function LaporanTransaksi({
           </div>
         </div>
 
-        {/* Search, Type Filter row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Search, Type Filter, Staff Filter row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={14} />
             <input
@@ -723,6 +784,20 @@ export default function LaporanTransaksi({
               <option value="semua">Semua Jenis Transaksi</option>
               <option value="pos">POS (Penjualan Toko)</option>
               <option value="service">Service HP (Reparasi Jasa)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <User size={13} className="text-slate-400" />
+            <select
+              value={filterCashier}
+              onChange={(e: any) => setFilterCashier(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-850 font-semibold focus:outline-none cursor-pointer"
+            >
+              <option value="semua">Semua Kasir / Staf Penginput</option>
+              {uniqueCashiers.map(cName => (
+                <option key={cName} value={cName}>Akun: {cName}</option>
+              ))}
             </select>
           </div>
 
@@ -895,8 +970,11 @@ export default function LaporanTransaksi({
                               <td className="py-3 px-3 text-slate-650 max-w-[220px] truncate" title={item.summaryText}>
                                 {item.summaryText}
                               </td>
-                              <td className="py-3 px-3 text-slate-500 font-semibold whitespace-nowrap">
-                                {item.cashierName}
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100/90 text-slate-800 font-bold text-[11px] rounded-lg border border-slate-200 shadow-2xs">
+                                  <User size={11} className="text-indigo-600 shrink-0" />
+                                  <span>{item.cashierName || 'Staff Kasir'}</span>
+                                </span>
                               </td>
                               {isAdminOrOwner && (
                                 <>
@@ -1005,13 +1083,13 @@ export default function LaporanTransaksi({
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-500 font-bold mb-1">Kasir / Staff Petugas</label>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1">Kasir / Staff Petugas (Akun Penginput)</label>
                       <input 
                         type="text"
                         value={editingTransaction.cashierName || ''}
                         onChange={(e) => setEditingTransaction({ ...editingTransaction, cashierName: e.target.value })}
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-indigo-500"
-                        placeholder="Nama Staff Kasir..."
+                        placeholder="Nama Akun Penginput..."
                       />
                     </div>
                     <div>

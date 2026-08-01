@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Product, Transaction, Service, Customer, OperationalExpense, Sparepart, AppAccount } from '../types';
+import { getServices, saveService, getTransactions, saveTransaction, updateTransaction } from '../db/mockDb';
 
 // SQL Skema penuh yang dapat disalin pengguna ke SQL Editor Supabase
 export const SUPABASE_FULL_SQL_SCHEMA = `-- SKEMA DATABASE UTAMA AFM STORE (SUPABASE)
@@ -796,11 +797,12 @@ export async function getServicesFromSupabase(): Promise<Service[]> {
     }));
   } catch (e) {
     console.error('Gagal mengambil services dari Supabase:', e);
-    return [];
+    return getServices();
   }
 }
 
 export async function saveServiceToSupabase(srv: Service): Promise<void> {
+  saveService(srv);
   if (!isSupabaseConfigured) return;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(srv.id);
@@ -892,7 +894,7 @@ export async function getTransactionsFromSupabase(): Promise<Transaction[]> {
       console.error('Gagal mengambil trx_customer_maps:', e);
     }
 
-    return (sales || []).map(sale => {
+    const cloudTxList = (sales || []).map(sale => {
       const saleItems = (items || [])
         .filter(it => it.transaction_id === sale.id)
         .map(it => ({
@@ -928,13 +930,21 @@ export async function getTransactionsFromSupabase(): Promise<Transaction[]> {
         cashierName: finalCashierName
       };
     });
+
+    // Merge offline/local transactions so nothing is lost
+    const localTx = getTransactions();
+    const cloudIds = new Set(cloudTxList.map(t => String(t.id)));
+    const unmergedLocal = localTx.filter(t => !cloudIds.has(String(t.id)));
+
+    return [...cloudTxList, ...unmergedLocal];
   } catch (e) {
     console.error('Gagal mengambil transactions dari Supabase:', e);
-    return [];
+    return getTransactions();
   }
 }
 
 export async function saveTransactionToSupabase(trx: Transaction): Promise<void> {
+  saveTransaction(trx);
   if (!isSupabaseConfigured) return;
   try {
     // Generate nomor transaksi unik yang megah
@@ -1117,6 +1127,7 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
 }
 
 export async function updateTransactionInSupabase(updatedTrx: Transaction): Promise<void> {
+  updateTransaction(updatedTrx);
   if (!isSupabaseConfigured) return;
   try {
     const totalModal = updatedTrx.items.reduce((sum, item) => sum + ((item.buyPrice + (item.repairCost || 0)) * item.quantity), 0);

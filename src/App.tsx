@@ -974,7 +974,7 @@ export default function App() {
               <POS
                 products={products}
                 activeRole={activeRole}
-                cashierName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
+                cashierName={currentUser?.name || currentUser?.username || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
                 onCheckout={handleCheckoutTransaction}
                 customers={customers}
               />
@@ -987,7 +987,7 @@ export default function App() {
                 typeFilter="iphone"
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}
-                currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
+                currentUserName={currentUser?.name || currentUser?.username || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />
             )}
 
@@ -998,7 +998,7 @@ export default function App() {
                 typeFilter="aksesoris"
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}
-                currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
+                currentUserName={currentUser?.name || currentUser?.username || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />
             )}
 
@@ -1007,7 +1007,7 @@ export default function App() {
                 transactions={transactions}
                 products={products}
                 activeRole={activeRole}
-                currentUserName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
+                currentUserName={currentUser?.name || currentUser?.username || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />
             )}
 
@@ -1015,7 +1015,7 @@ export default function App() {
               <ServiceHP
                 services={services}
                 activeRole={activeRole}
-                cashierName={currentUser?.name || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
+                cashierName={currentUser?.name || currentUser?.username || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
                 spareparts={spareparts}
                 onSaveService={handleSaveService}
                 onDeleteService={handleDeleteService}
