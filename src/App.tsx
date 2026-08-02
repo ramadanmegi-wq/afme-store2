@@ -1031,6 +1031,7 @@ export default function App() {
               <TrackingKaryawan
                 transactions={transactions}
                 products={products}
+                services={services}
                 activeRole={activeRole}
                 currentUserName={currentUser?.name || currentUser?.username || (activeRole === 'owner' ? 'Owner Toko' : activeRole === 'admin' ? 'Admin AFME' : 'Staff Kasir')}
               />

@@ -10,7 +10,10 @@ import {
   RotateCcw, 
   Package,
   AlertCircle,
-  UserCheck
+  UserCheck,
+  DollarSign,
+  TrendingUp,
+  CheckCircle2
 } from 'lucide-react';
 import { Product, ProductType, UserRole } from '../types';
 
@@ -127,6 +130,21 @@ export default function IPhoneStock({
     setIsFormOpen(false);
   };
 
+  // Calculated inventory metrics for cards & balance audit
+  const hpProducts = products.filter(p => p.type === 'iphone' || (p.type as string) === 'hp');
+  const availableHpProducts = hpProducts.filter(p => p.status === 'available' || (p.status as string) === 'ready');
+  const soldHpProducts = hpProducts.filter(p => p.status === 'sold');
+
+  const totalModalHpReady = availableHpProducts.reduce((sum, p) => sum + (p.buyPrice + (p.repairCost || 0)) * (p.stock || 1), 0);
+  const totalSellingPriceHpReady = availableHpProducts.reduce((sum, p) => sum + p.sellingPrice * (p.stock || 1), 0);
+  const projectedProfitHpReady = totalSellingPriceHpReady - totalModalHpReady;
+
+  const accProducts = products.filter(p => p.type === 'aksesoris');
+  const availableAccProducts = accProducts.filter(p => p.status === 'available' || (p.status as string) === 'ready');
+  const totalModalAccReady = availableAccProducts.reduce((sum, p) => sum + p.buyPrice * (p.stock || 0), 0);
+  const totalSellingPriceAccReady = availableAccProducts.reduce((sum, p) => sum + p.sellingPrice * (p.stock || 0), 0);
+  const projectedProfitAccReady = totalSellingPriceAccReady - totalModalAccReady;
+
   return (
     <div className="space-y-6">
       {/* Header and Controls */}
@@ -154,6 +172,64 @@ export default function IPhoneStock({
           </div>
         )}
       </div>
+
+      {/* Summary Metrics Cards for Stock Balance */}
+      {typeFilter === 'iphone' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white p-4.5 rounded-2xl border border-slate-200/85 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block font-sans">STOK HP READY</span>
+            <div className="flex items-baseline justify-between">
+              <p className="text-xl font-extrabold font-mono text-slate-900">{availableHpProducts.length} <span className="text-xs font-medium text-slate-500">Unit</span></p>
+              <span className="text-[10.5px] text-slate-400 font-medium">Terjual: <strong className="text-indigo-600">{soldHpProducts.length}</strong></span>
+            </div>
+            <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">Unit siap pajang di etalase</p>
+          </div>
+
+          <div className="bg-white p-4.5 rounded-2xl border border-indigo-100/90 bg-gradient-to-br from-indigo-50/30 to-white shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block font-sans">TOTAL MODAL HP READY (ASET)</span>
+            <p className="text-xl font-extrabold font-mono text-indigo-950">{formatIDR(totalModalHpReady)}</p>
+            <p className="text-[10px] text-indigo-600/80 pt-1 border-t border-indigo-100/60 font-medium">Modal Beli Pokok + Biaya Servis Unit</p>
+          </div>
+
+          <div className="bg-white p-4.5 rounded-2xl border border-slate-200/85 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block font-sans">NILAI JUAL PROYEKSI</span>
+            <p className="text-xl font-extrabold font-mono text-slate-900">{formatIDR(totalSellingPriceHpReady)}</p>
+            <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">Target omset jika seluruh HP terjual</p>
+          </div>
+
+          <div className="bg-white p-4.5 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block font-sans">PROYEKSI LABA KOTOR</span>
+            <p className="text-xl font-extrabold font-mono text-emerald-600">{formatIDR(projectedProfitHpReady)}</p>
+            <p className="text-[10px] text-emerald-700/80 pt-1 border-t border-emerald-100 font-medium">Potensi keuntungan kotor HP Ready</p>
+          </div>
+        </div>
+      ) : typeFilter === 'aksesoris' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white p-4.5 rounded-2xl border border-slate-200/85 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block font-sans">KATALOG AKSESORIS</span>
+            <p className="text-xl font-extrabold font-mono text-slate-900">{accProducts.length} <span className="text-xs font-medium text-slate-500">SKU</span></p>
+            <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">Variasi aksesoris aktif</p>
+          </div>
+
+          <div className="bg-white p-4.5 rounded-2xl border border-violet-100 bg-violet-50/20 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-violet-700 uppercase tracking-wider block font-sans">TOTAL MODAL AKSESORIS</span>
+            <p className="text-xl font-extrabold font-mono text-slate-900">{formatIDR(totalModalAccReady)}</p>
+            <p className="text-[10px] text-violet-700/80 pt-1 border-t border-violet-100 font-medium">Aset modal stok aksesoris</p>
+          </div>
+
+          <div className="bg-white p-4.5 rounded-2xl border border-slate-200/85 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block font-sans">NILAI JUAL PROYEKSI</span>
+            <p className="text-xl font-extrabold font-mono text-slate-900">{formatIDR(totalSellingPriceAccReady)}</p>
+            <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">Target omset aksesoris</p>
+          </div>
+
+          <div className="bg-white p-4.5 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-xs space-y-1">
+            <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block font-sans">PROYEKSI LABA KOTOR</span>
+            <p className="text-xl font-extrabold font-mono text-emerald-600">{formatIDR(projectedProfitAccReady)}</p>
+            <p className="text-[10px] text-emerald-700/80 pt-1 border-t border-emerald-100 font-medium">Potensi margin aksesoris</p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Admin Add/Edit Form Panel */}
       {isFormOpen && (activeRole === 'admin' || activeRole === 'owner') && (

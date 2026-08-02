@@ -372,11 +372,12 @@ export default function LaporanTransaksi({
       });
     });
 
-    // Process Services (Include all services)
+    // Process Services (Include only completed services for revenue/profit, display note for status)
     (services || []).forEach(s => {
       const svcDate = parseDateString(s.date);
       const dateStr = getLocalDateString(svcDate);
-      const statusNote = s.status === 'selesai' ? '' : ` [${(s.status || 'proses').toUpperCase()}]`;
+      const isCompleted = s.status === 'selesai';
+      const statusNote = isCompleted ? '' : ` [${(s.status || 'proses').toUpperCase()}]`;
 
       list.push({
         id: s.id,
@@ -387,8 +388,8 @@ export default function LaporanTransaksi({
         customerPhone: s.customerPhone || '',
         cashierName: s.cashierName || 'Teknisi',
         summaryText: `Reparasi ${s.devModel || 'HP'} (${s.description || 'Jasa'})${statusNote}`,
-        amount: s.cost || 0,
-        profit: Math.max(0, (s.cost || 0) - (s.capitalCost || 0)),
+        amount: isCompleted ? (s.cost || 0) : 0,
+        profit: isCompleted ? Math.max(0, (s.cost || 0) - (s.capitalCost || 0)) : 0,
         itemsCount: 1,
         originalData: s
       });

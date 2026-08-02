@@ -30,7 +30,7 @@ const formatIDR = (num: number) => {
 interface POSProps {
   products: Product[];
   activeRole: UserRole;
-  onCheckout: (transaction: Transaction) => void;
+  onCheckout: (transaction: Transaction) => void | Promise<void>;
   cashierName: string;
   customers?: Customer[];
 }
@@ -47,6 +47,7 @@ export default function POS({ products, activeRole, onCheckout, cashierName, cus
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const matchedCustomers = useMemo(() => {
     if (!customerName.trim()) return [];
@@ -375,7 +376,8 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
   }, [cart]);
 
   // Handle Checkout Submit
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
+    if (isSubmitting) return;
     setValidationError(null);
     if (cart.length === 0) {
       setValidationError('Isi keranjang belanja terlebih dahulu.');
@@ -401,40 +403,47 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
       }
     }
 
-    const tradeInObj: TradeInItem | undefined = hasTradeIn && tradeInModel && tradeInImei && tradeInValue > 0
-      ? {
-          model: tradeInModel.trim(),
-          imei: tradeInImei.trim(),
-          buyPrice: tradeInValue,
-          repairCost: tradeInRepairCost
-        }
-      : undefined;
+    setIsSubmitting(true);
+    try {
+      const tradeInObj: TradeInItem | undefined = hasTradeIn && tradeInModel && tradeInImei && tradeInValue > 0
+        ? {
+            model: tradeInModel.trim(),
+            imei: tradeInImei.trim(),
+            buyPrice: tradeInValue,
+            repairCost: tradeInRepairCost
+          }
+        : undefined;
 
-    const newTrx: Transaction = {
-      id: `trx-${Date.now()}`,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
-      items: cart,
-      tradeIn: tradeInObj,
-      totalAmount: finalTotal,
-      totalProfit: totalProfit,
-      date: new Date().toISOString(),
-      cashierName: cashierName,
-    };
+      const newTrx: Transaction = {
+        id: `trx-${Date.now()}`,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        items: cart,
+        tradeIn: tradeInObj,
+        totalAmount: finalTotal,
+        totalProfit: totalProfit,
+        date: new Date().toISOString(),
+        cashierName: cashierName,
+      };
 
-    onCheckout(newTrx);
-    setLastTrx(newTrx);
-    setWaPhone(newTrx.customerPhone);
-    
-    // Clear Form & Cart
-    setCart([]);
-    setCustomerName('');
-    setCustomerPhone('');
-    setHasTradeIn(false);
-    setTradeInModel('');
-    setTradeInImei('');
-    setTradeInValue(0);
-    setTradeInRepairCost(0);
+      await onCheckout(newTrx);
+      setLastTrx(newTrx);
+      setWaPhone(newTrx.customerPhone);
+      
+      // Clear Form & Cart
+      setCart([]);
+      setCustomerName('');
+      setCustomerPhone('');
+      setHasTradeIn(false);
+      setTradeInModel('');
+      setTradeInImei('');
+      setTradeInValue(0);
+      setTradeInRepairCost(0);
+    } catch (err) {
+      console.error('Error during POS checkout:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (lastTrx) {
@@ -1093,14 +1102,14 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
         {/* Checkout Button */}
         <button
           onClick={handleCheckout}
-          disabled={cart.length === 0}
+          disabled={cart.length === 0 || isSubmitting}
           className={`w-full py-3.5 rounded-2xl font-bold text-xs tracking-widest uppercase flex items-center justify-center gap-2 transition cursor-pointer ${
-            cart.length > 0
+            cart.length > 0 && !isSubmitting
               ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/10'
               : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed'
           }`}
         >
-          <Sparkles size={15} /> Checkout POS Kasir
+          <Sparkles size={15} /> {isSubmitting ? 'Memproses Transaksi...' : 'Checkout POS Kasir'}
         </button>
 
       </div>

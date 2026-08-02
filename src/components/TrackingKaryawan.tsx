@@ -21,12 +21,13 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { Transaction, Product, AppAccount, UserRole } from '../types';
+import { Transaction, Product, AppAccount, UserRole, Service } from '../types';
 import { getAccounts } from '../db/mockDb';
 
 interface TrackingKaryawanProps {
   transactions: Transaction[];
   products: Product[];
+  services?: Service[];
   activeRole: UserRole;
   currentUserName: string;
 }
@@ -52,6 +53,7 @@ interface StaffStatItem {
 export default function TrackingKaryawan({
   transactions,
   products,
+  services = [],
   activeRole,
   currentUserName,
 }: TrackingKaryawanProps) {
@@ -182,7 +184,7 @@ export default function TrackingKaryawan({
       };
     });
 
-    // Process transactions (Sales)
+    // Process transactions (Sales POS)
     filteredTransactions.forEach(t => {
       const matchedStaff = findTrackedStaff(t.cashierName);
       if (!matchedStaff || !stats[matchedStaff]) return;
@@ -192,26 +194,51 @@ export default function TrackingKaryawan({
       
       let trxProfit = 0;
       let hpUnits = 0;
-      if (t.items && t.items.length > 0) {
+
+      // Primary source of truth for transaction profit is t.totalProfit (matches LaporanTransaksi)
+      if (typeof t.totalProfit === 'number' && !isNaN(t.totalProfit)) {
+        trxProfit = t.totalProfit;
+      } else if (t.items && t.items.length > 0) {
         t.items.forEach(item => {
           const selling = item.sellingPrice ?? (item as any).price ?? 0;
           const buy = item.buyPrice ?? 0;
           const repair = item.repairCost ?? 0;
           const qty = item.quantity ?? (item as any).qty ?? 1;
-          const pType = item.type ?? (item as any).productType;
 
           trxProfit += (selling - (buy + repair)) * qty;
-          if (pType === 'iphone') {
+        });
+      }
+
+      if (t.items && t.items.length > 0) {
+        t.items.forEach(item => {
+          const qty = item.quantity ?? (item as any).qty ?? 1;
+          const matchedProd = products.find(p => p.id === item.productId);
+          const pType = item.type ?? (item as any).productType ?? (matchedProd ? matchedProd.type : undefined);
+          if (pType === 'iphone' || (pType as string) === 'hp') {
             hpUnits += qty;
           }
         });
       }
-      if ((!trxProfit || isNaN(trxProfit)) && typeof t.totalProfit === 'number') {
-        trxProfit = t.totalProfit;
-      }
+
       stats[matchedStaff].salesProfit += isNaN(trxProfit) ? 0 : trxProfit;
       stats[matchedStaff].hpUnitsSold += isNaN(hpUnits) ? 0 : hpUnits;
     });
+
+    // Process services (Jasa Service)
+    if (services && services.length > 0) {
+      services.forEach(s => {
+        if (!isDateInFilter(s.date)) return;
+        const matchedStaff = findTrackedStaff(s.cashierName);
+        if (!matchedStaff || !stats[matchedStaff]) return;
+
+        if (s.status === 'selesai') {
+          const srvProfit = Math.max(0, (s.cost || 0) - (s.capitalCost || 0));
+          stats[matchedStaff].salesCount += 1;
+          stats[matchedStaff].salesOmset += (s.cost || 0);
+          stats[matchedStaff].salesProfit += srvProfit;
+        }
+      });
+    }
 
     // Process products (Stock purchases)
     products.forEach(p => {
@@ -227,7 +254,7 @@ export default function TrackingKaryawan({
     });
 
     return stats;
-  }, [allStaffNames, filteredTransactions, products]);
+  }, [allStaffNames, filteredTransactions, products, services]);
 
   // Overall totals
   const overallTotals = useMemo(() => {
@@ -733,9 +760,17 @@ export default function TrackingKaryawan({
               <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
                 {salesLogsFiltered.map((t) => {
                   let totalProfit = 0;
-                  t.items.forEach(i => {
-                    totalProfit += (i.price - i.buyPrice) * i.qty;
-                  });
+                  if (typeof t.totalProfit === 'number' && !isNaN(t.totalProfit)) {
+                    totalProfit = t.totalProfit;
+                  } else if (t.items && t.items.length > 0) {
+                    t.items.forEach(i => {
+                      const selling = i.sellingPrice ?? (i as any).price ?? 0;
+                      const buy = i.buyPrice ?? 0;
+                      const repair = i.repairCost ?? 0;
+                      const qty = i.quantity ?? (i as any).qty ?? 1;
+                      totalProfit += (selling - (buy + repair)) * qty;
+                    });
+                  }
 
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/80 transition">
@@ -749,15 +784,19 @@ export default function TrackingKaryawan({
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        <span className="font-mono font-bold text-slate-900 block">{t.invoiceNumber}</span>
+                        <span className="font-mono font-bold text-slate-900 block">{t.id}</span>
                         <span className="text-[10px] text-slate-500">{t.customerName || 'Pelanggan Umum'}</span>
                       </td>
                       <td className="py-3 px-4 space-y-0.5">
-                        {t.items.map((item, idx) => (
-                          <div key={idx} className="text-[11px] text-slate-700">
-                            • {item.productModel} x{item.qty}
-                          </div>
-                        ))}
+                        {t.items && t.items.length > 0 ? (
+                          t.items.map((item, idx) => (
+                            <div key={idx} className="text-[11px] text-slate-700">
+                              • {item.model || 'Barang'} x{item.quantity || 1}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-[11px] text-slate-500">Penjualan</div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-black text-slate-900">
                         {formatIDR(t.totalAmount)}

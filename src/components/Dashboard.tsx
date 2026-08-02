@@ -66,9 +66,10 @@ export default function Dashboard({
   const totalRevenueVal = totalSalesVal + servicesRevenue;
   const totalProfitVal = salesProfit + servicesProfit;
 
-  // Stok iPhone available
-  const availableIphones = products.filter(p => p.type === 'iphone' && p.status === 'available');
-  const soldIphones = products.filter(p => p.type === 'iphone' && p.status === 'sold');
+  // Stok iPhone available & Total Modal
+  const availableIphones = products.filter(p => (p.type === 'iphone' || (p.type as string) === 'hp') && (p.status === 'available' || (p.status as string) === 'ready'));
+  const soldIphones = products.filter(p => (p.type === 'iphone' || (p.type as string) === 'hp') && p.status === 'sold');
+  const totalModalHpReadyVal = availableIphones.reduce((sum, p) => sum + (p.buyPrice + (p.repairCost || 0)) * (p.stock || 1), 0);
 
   // Stok Aksesoris menipis (stok < 5)
   const lowStockProducts = products.filter(p => p.type === 'aksesoris' && (p.stock || 0) < 5);
@@ -476,8 +477,8 @@ export default function Dashboard({
             <p className="text-lg md:text-xl font-extrabold text-slate-900 mt-1">
               {availableIphones.length} <span className="text-xs font-normal text-slate-500">Unit</span>
             </p>
-            <div className="text-[10px] text-slate-500 mt-1">
-              Terjual: <span className="text-indigo-600 font-semibold">{soldIphones.length} unit</span>
+            <div className="text-[10px] text-indigo-700 font-extrabold font-mono mt-1">
+              Modal Aset: {formatIDR(totalModalHpReadyVal)}
             </div>
           </div>
           <div className="p-3.5 bg-amber-50 text-amber-600 rounded-2xl border border-amber-100">

@@ -802,7 +802,6 @@ export async function getServicesFromSupabase(): Promise<Service[]> {
 }
 
 export async function saveServiceToSupabase(srv: Service): Promise<void> {
-  saveService(srv);
   if (!isSupabaseConfigured) return;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(srv.id);
@@ -931,10 +930,28 @@ export async function getTransactionsFromSupabase(): Promise<Transaction[]> {
       };
     });
 
-    // Merge offline/local transactions so nothing is lost
+    // Merge offline/local transactions so nothing is lost, while avoiding duplicates
     const localTx = getTransactions();
     const cloudIds = new Set(cloudTxList.map(t => String(t.id)));
-    const unmergedLocal = localTx.filter(t => !cloudIds.has(String(t.id)));
+    const unmergedLocal = localTx.filter(loc => {
+      if (cloudIds.has(String(loc.id))) return false;
+      if (localMaps[loc.id]) return false;
+
+      // Filter out duplicate transactions that match cloudTxList
+      const isDuplicate = cloudTxList.some(cloud => {
+        const sameAmount = Math.abs(cloud.totalAmount - loc.totalAmount) < 1;
+        const sameCustomer = (cloud.customerName || '').trim().toLowerCase() === (loc.customerName || '').trim().toLowerCase();
+        const sameItemsCount = cloud.items.length === loc.items.length;
+        const cloudTime = new Date(cloud.date).getTime();
+        const locTime = new Date(loc.date).getTime();
+        const timeDiffMs = Math.abs(cloudTime - locTime);
+        const sameTime = !isNaN(timeDiffMs) && timeDiffMs < 300000; // within 5 minutes
+
+        return sameAmount && sameCustomer && sameItemsCount && sameTime;
+      });
+
+      return !isDuplicate;
+    });
 
     return [...cloudTxList, ...unmergedLocal];
   } catch (e) {
@@ -944,7 +961,6 @@ export async function getTransactionsFromSupabase(): Promise<Transaction[]> {
 }
 
 export async function saveTransactionToSupabase(trx: Transaction): Promise<void> {
-  saveTransaction(trx);
   if (!isSupabaseConfigured) return;
   try {
     // Generate nomor transaksi unik yang megah
@@ -1127,7 +1143,6 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
 }
 
 export async function updateTransactionInSupabase(updatedTrx: Transaction): Promise<void> {
-  updateTransaction(updatedTrx);
   if (!isSupabaseConfigured) return;
   try {
     const totalModal = updatedTrx.items.reduce((sum, item) => sum + ((item.buyPrice + (item.repairCost || 0)) * item.quantity), 0);

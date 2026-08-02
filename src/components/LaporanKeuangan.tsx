@@ -258,63 +258,63 @@ export default function LaporanKeuangan({
     const { transactions: fTx, services: fSv, expenses: fEx } = filteredData;
 
     // 1. PENDAPATAN (REVENUE)
-    // - POS Penjualan (Aksesoris & HP)
+    // - POS Penjualan Tunai Kasir
     const posRevenue = fTx.reduce((sum, tx) => sum + tx.totalAmount, 0);
-    // - Service HP (Uang Jasa Reparasi yang ditagih)
+    // - Nilai Konversi Tukar Tambah (Trade-In Unit Aset)
+    const totalTradeInAllowance = fTx.reduce((sum, tx) => sum + (tx.tradeIn ? tx.tradeIn.buyPrice : 0), 0);
+    // - Service HP Selesai (Uang Jasa Reparasi yang ditagih)
     const completedServices = fSv.filter(s => s.status === 'selesai');
     const serviceRevenue = completedServices.reduce((sum, s) => sum + s.cost, 0);
-    const totalRevenue = posRevenue + serviceRevenue;
+    // Total Penjualan & Perolehan Kotor (Gross Revenue)
+    const totalRevenue = posRevenue + totalTradeInAllowance + serviceRevenue;
 
-    // 2. BEBAN MODAL & COGS (BEBAN POKOK PENJUALAN)
-    // - Harga modal HP & aksesoris yang terjual dalam periode tersebut
-    let modalPos = 0;
-    let repairCostPos = 0;
-    fTx.forEach(tx => {
-      tx.items.forEach(it => {
+    // 2. PROFIT / KEUNTUNGAN KOTOR (GROSS PROFIT)
+    // Primary source of truth for POS profit: tx.totalProfit (matches LaporanTransaksi & TrackingKaryawan)
+    const posProfit = fTx.reduce((sum, tx) => {
+      if (typeof tx.totalProfit === 'number' && !isNaN(tx.totalProfit)) {
+        return sum + tx.totalProfit;
+      }
+      // Fallback calculation from items
+      const itemProfit = (tx.items || []).reduce((s, it) => {
         const matchedProduct = products.find(p => p.id === it.productId);
-        const actualBuyPrice = matchedProduct ? matchedProduct.buyPrice : it.buyPrice;
-        const actualRepairCost = matchedProduct ? matchedProduct.repairCost : (it.repairCost || 0);
+        const buy = (it.buyPrice !== undefined && it.buyPrice > 0) ? it.buyPrice : (matchedProduct ? matchedProduct.buyPrice : 0);
+        const repair = (it.repairCost !== undefined) ? it.repairCost : (matchedProduct ? (matchedProduct.repairCost || 0) : 0);
+        return s + (it.sellingPrice - (buy + repair)) * it.quantity;
+      }, 0);
+      return sum + itemProfit;
+    }, 0);
 
-        modalPos += actualBuyPrice * it.quantity;
-        repairCostPos += actualRepairCost * it.quantity;
-      });
-    });
+    const serviceProfit = completedServices.reduce((sum, s) => sum + Math.max(0, (s.cost || 0) - (s.capitalCost || 0)), 0);
+    const grossProfit = posProfit + serviceProfit;
 
-    // - Modal Sparepart Service
+    // 3. BEBAN MODAL & COGS (BEBAN POKOK PENJUALAN)
+    const totalHPP = Math.max(0, totalRevenue - grossProfit);
     const modalSparepartService = completedServices.reduce((sum, s) => sum + s.capitalCost, 0);
+    const hpPurchasingCost = Math.max(0, totalHPP - modalSparepartService);
+    const initialRepairsCost = 0;
 
-    // Total Beban Pokok (HPP)
-    const hpPurchasingCost = modalPos;
-    const initialRepairsCost = repairCostPos;
-    const totalHPP = hpPurchasingCost + initialRepairsCost + modalSparepartService;
-
-    // 3. PENGELUARAN LAIN (OPERASIONAL & BEBAN USAHA)
+    // 4. PENGELUARAN OPERASIONAL (OPEX)
     const totalOperationalExpense = fEx.reduce((sum, e) => sum + e.amount, 0);
 
-    // 4. PENILAIAN TUKAR TAMBAH (TRADE IN SEBAGAI ASSET ACQUISITION)
-    // Pada dasarnya trade-in mengurangi uang masuk penjualan langsung, tapi kita mendapatkan stok HP second baru yang bernilai
-    const totalTradeInAllowance = fTx.reduce((sum, tx) => sum + (tx.tradeIn ? tx.tradeIn.buyPrice : 0), 0);
-
-    // 5. KEUNTUNGAN KOTOR (GROSS PROFIT)
-    const grossProfit = totalRevenue - totalHPP;
-
-    // 6. LABA BERSIH OPERASIONAL (NET PROFIT)
-    // Keuntungan kotor dikurangi biaya operasional tambahan (beban usaha)
+    // 5. LABA BERSIH OPERASIONAL (NET PROFIT)
     const netProfit = grossProfit - totalOperationalExpense;
 
-    // 7. ARUS KAS & PERSENTASE INTERAKTIF (PERHITUNGAN KAS & NILAI STOK)
+    // 6. NILAI PERSEDIAAN STOK BARANG & LIFETIME RECONCILIATION
     
     // a) Nilai total stok HP yang tersedia (Asset Persediaan Aktif HP)
     const totalSisaHpModal = products.reduce((sum, p) => {
-      if (p.status === 'available' && p.type === 'iphone') {
-        return sum + p.buyPrice + (p.repairCost || 0);
+      const isHp = p.type === 'iphone' || (p.type as string) === 'hp';
+      const isAvailable = p.status === 'available' || (p.status as string) === 'ready';
+      if (isAvailable && isHp) {
+        return sum + (p.buyPrice + (p.repairCost || 0)) * (p.stock || 1);
       }
       return sum;
     }, 0);
 
     // b) Nilai total stok Aksesoris yang tersedia (Asset Persediaan Aktif Aksesoris)
     const totalSisaAksesorisModal = products.reduce((sum, p) => {
-      if (p.status === 'available' && p.type === 'aksesoris') {
+      const isAvailable = p.status === 'available' || (p.status as string) === 'ready';
+      if (isAvailable && p.type === 'aksesoris') {
         return sum + (p.buyPrice * (p.stock || 0));
       }
       return sum;
@@ -323,38 +323,40 @@ export default function LaporanKeuangan({
     const totalSisaPersediaanModal = totalSisaHpModal + totalSisaAksesorisModal;
 
     // c) Nilai total stok sparepart yang tersedia (Asset Persediaan Suku Cadang)
-    const totalSisaSparepartsModal = spareparts.reduce((sum, sp) => sum + (sp.buyPrice * sp.stock), 0);
+    const totalSisaSparepartsModal = spareparts.reduce((sum, sp) => sum + (sp.buyPrice * (sp.stock || 0)), 0);
 
-    // c) Hitung HPP Lifetime POS dari seluruh transaksi terdaftar
-    let lifetimeHppPos = 0;
-    transactions.forEach(tx => {
-      tx.items.forEach(it => {
-        const matchedProduct = products.find(p => p.id === it.productId);
-        const actualBuyPrice = matchedProduct ? matchedProduct.buyPrice : it.buyPrice;
-        const actualRepairCost = matchedProduct ? matchedProduct.repairCost : (it.repairCost || 0);
-        lifetimeHppPos += (actualBuyPrice + actualRepairCost) * it.quantity;
-      });
-    });
-
-    // d) Total modal belanja spareparts/suku cadang (yang sudah terpakai di service selesai)
-    const lifetimeSparepartService = services.filter(s => s.status === 'selesai').reduce((sum, s) => sum + s.capitalCost, 0);
-
-    // e) Total kas keluar untuk belanja seluruh stok HP & aksesoris (Persediaan Aktif + Terjual)
-    const totalKasKeluarUntukStok = totalSisaPersediaanModal + lifetimeHppPos;
-
-    // f) Total kas keluar untuk belanja suku cadang (Persediaan Aktif + Terpakai)
-    const totalKasKeluarBelanjaSparepart = totalSisaSparepartsModal + lifetimeSparepartService;
-
-    // g) Lifetime Income & OPEX
+    // d) Lifetime Profit & Revenue
     const lifetimePosRevenue = transactions.reduce((sum, tx) => sum + tx.totalAmount, 0);
+    const lifetimeTradeInAllowance = transactions.reduce((sum, tx) => sum + (tx.tradeIn ? tx.tradeIn.buyPrice : 0), 0);
     const lifetimeServiceRevenue = services.filter(s => s.status === 'selesai').reduce((sum, s) => sum + s.cost, 0);
     const lifetimeOperationalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
 
-    // h) Lifetime Profit & Cash Balance Reconciliation
-    const cumulativeNetProfit = (lifetimePosRevenue + lifetimeServiceRevenue) - (lifetimeHppPos + lifetimeSparepartService) - lifetimeOperationalExpense;
-    const saldoKasKumulatif = modalAwal + lifetimePosRevenue + lifetimeServiceRevenue - totalKasKeluarUntukStok - totalKasKeluarBelanjaSparepart - lifetimeOperationalExpense;
+    const lifetimePosProfit = transactions.reduce((sum, tx) => {
+      if (typeof tx.totalProfit === 'number' && !isNaN(tx.totalProfit)) {
+        return sum + tx.totalProfit;
+      }
+      const itemProfit = (tx.items || []).reduce((s, it) => {
+        const matchedProduct = products.find(p => p.id === it.productId);
+        const buy = (it.buyPrice !== undefined && it.buyPrice > 0) ? it.buyPrice : (matchedProduct ? matchedProduct.buyPrice : 0);
+        const repair = (it.repairCost !== undefined) ? it.repairCost : (matchedProduct ? (matchedProduct.repairCost || 0) : 0);
+        return s + (it.sellingPrice - (buy + repair)) * it.quantity;
+      }, 0);
+      return sum + itemProfit;
+    }, 0);
 
-    // i) Double-Entry Balance Audit Reconciliation
+    const lifetimeServiceProfit = services.filter(s => s.status === 'selesai').reduce((sum, s) => sum + Math.max(0, (s.cost || 0) - (s.capitalCost || 0)), 0);
+    const lifetimeGrossProfit = lifetimePosProfit + lifetimeServiceProfit;
+    const cumulativeNetProfit = lifetimeGrossProfit - lifetimeOperationalExpense;
+
+    const lifetimeSparepartService = services.filter(s => s.status === 'selesai').reduce((sum, s) => sum + s.capitalCost, 0);
+    const totalKasKeluarBelanjaSparepart = totalSisaSparepartsModal + lifetimeSparepartService;
+    const totalKasKeluarUntukStok = totalSisaPersediaanModal + Math.max(0, lifetimePosRevenue - lifetimePosProfit);
+
+    // e) Double-Entry Balance Audit Reconciliation
+    // Active Assets = Cash + Inventory + Spareparts
+    // Passive Capital = Initial Capital + Cumulative Net Profit
+    // So Cash = Initial Capital + Cumulative Net Profit - Inventory - Spareparts
+    const saldoKasKumulatif = modalAwal + cumulativeNetProfit - totalSisaPersediaanModal - totalSisaSparepartsModal;
     const aktivaTotal = saldoKasKumulatif + totalSisaPersediaanModal + totalSisaSparepartsModal;
     const pasivaTotal = modalAwal + cumulativeNetProfit;
     const selisihRekonsiliasi = aktivaTotal - pasivaTotal;
@@ -1575,7 +1577,7 @@ export default function LaporanKeuangan({
                 <tbody className="divide-y divide-slate-100">
                   {/* Step 1: Pendapatan */}
                   <tr className="hover:bg-slate-50/60 transition">
-                    <td className="py-2.5 px-4 font-semibold text-slate-700">1. Penjualan POS (HP & Aksesoris)</td>
+                    <td className="py-2.5 px-4 font-semibold text-slate-700">1. Penjualan POS (Kas Tunai / Transfer)</td>
                     <td className="py-2.5 px-4 text-slate-500">Kas Masuk Kasir POS</td>
                     <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-800">{formatIDR(stats.posRevenue)}</td>
                   </tr>
@@ -1584,12 +1586,19 @@ export default function LaporanKeuangan({
                     <td className="py-2.5 px-4 text-slate-500">Tagihan Service Selesai</td>
                     <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-800">{formatIDR(stats.serviceRevenue)}</td>
                   </tr>
+                  {stats.totalTradeInAllowance > 0 && (
+                    <tr className="hover:bg-slate-50/60 transition">
+                      <td className="py-2.5 px-4 font-semibold text-slate-700">3. Nilai Unit Tukar Tambah (Trade-In)</td>
+                      <td className="py-2.5 px-4 text-slate-500">Konversi Aset Barang Masuk Stok</td>
+                      <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-800">{formatIDR(stats.totalTradeInAllowance)}</td>
+                    </tr>
+                  )}
                   <tr className="bg-emerald-50/70 border-y border-emerald-100 font-extrabold">
                     <td className="py-3 px-4 text-emerald-900 flex items-center gap-1.5">
                       <ArrowUpRight size={15} className="text-emerald-600" />
-                      TOTAL PENDAPATAN (REVENUE)
+                      TOTAL PENDAPATAN & ASET PENJUALAN (REVENUE)
                     </td>
-                    <td className="py-3 px-4 text-emerald-800 font-mono text-[11px]">(POS + Jasa Service)</td>
+                    <td className="py-3 px-4 text-emerald-800 font-mono text-[11px]">(POS + Trade-In + Jasa Service)</td>
                     <td className="py-3 px-4 text-right font-mono text-sm text-emerald-700">{formatIDR(stats.totalRevenue)}</td>
                   </tr>
 
