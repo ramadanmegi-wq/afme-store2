@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   ShoppingCart, 
@@ -36,6 +36,15 @@ interface POSProps {
 }
 
 export default function POS({ products, activeRole, onCheckout, cashierName, customers = [] }: POSProps) {
+  // Cashier staff name state
+  const [selectedCashier, setSelectedCashier] = useState(cashierName || 'Staff Kasir');
+
+  useEffect(() => {
+    if (cashierName) {
+      setSelectedCashier(cashierName);
+    }
+  }, [cashierName]);
+
   // States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | 'iphone' | 'aksesoris'>('all');
@@ -423,7 +432,7 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
         totalAmount: finalTotal,
         totalProfit: totalProfit,
         date: new Date().toISOString(),
-        cashierName: cashierName,
+        cashierName: selectedCashier.trim() || cashierName || 'Staff Kasir',
       };
 
       await onCheckout(newTrx);
@@ -940,6 +949,18 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div className="pt-1">
+              <label className="block text-[9.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Staff Kasir / Akun Penginput
+              </label>
+              <input
+                type="text"
+                placeholder="Nama Staff Kasir"
+                value={selectedCashier}
+                onChange={(e) => setSelectedCashier(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-extrabold text-slate-800 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>

@@ -87,7 +87,7 @@ export default function IPhoneStock({
     setSellingPrice(0);
     setStatus('available');
     setStock(1);
-    setPurchaserName(currentUserName || '');
+    setPurchaserName(currentUserName || 'Aldi');
     setIsFormOpen(true);
   };
 
@@ -103,7 +103,7 @@ export default function IPhoneStock({
     setSellingPrice(p.sellingPrice);
     setStatus(p.status);
     setStock(p.stock || 1);
-    setPurchaserName(p.purchaserName || '');
+    setPurchaserName(p.purchaserName || currentUserName || 'Aldi');
     setIsFormOpen(true);
   };
 
@@ -123,7 +123,7 @@ export default function IPhoneStock({
       sellingPrice: Number(sellingPrice),
       status,
       stock: type === 'aksesoris' ? Number(stock) : undefined,
-      purchaserName: purchaserName.trim() || undefined,
+      purchaserName: purchaserName.trim() || currentUserName || 'Aldi',
     };
 
     onSaveProduct(newProduct);

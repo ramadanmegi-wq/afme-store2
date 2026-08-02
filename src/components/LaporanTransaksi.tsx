@@ -31,6 +31,7 @@ interface LaporanTransaksiProps {
   onUpdateTransaction?: (trx: Transaction) => Promise<void>;
   products?: Product[];
   onSaveProduct?: (prod: Product) => Promise<void>;
+  currentUserName?: string;
 }
 
 export default function LaporanTransaksi({
@@ -39,7 +40,8 @@ export default function LaporanTransaksi({
   activeRole,
   onUpdateTransaction,
   products,
-  onSaveProduct
+  onSaveProduct,
+  currentUserName
 }: LaporanTransaksiProps) {
   const [selectedTab, setSelectedTab] = useState<'harian' | 'mingguan' | 'bulanan'>('harian');
   const [searchQuery, setSearchQuery] = useState('');
@@ -346,6 +348,15 @@ export default function LaporanTransaksi({
       originalData: any;
     }> = [];
 
+    const resolveCashierName = (raw?: string) => {
+      if (!raw) return currentUserName || 'Aldi';
+      const trimmed = raw.trim();
+      if (['Kasir', 'Staff Kasir', 'Teknisi', 'Staff Service', 'Staff AFM', 'Staff'].includes(trimmed)) {
+        return currentUserName || 'Aldi';
+      }
+      return trimmed;
+    };
+
     // Process POS Transactions
     (transactions || []).forEach(tx => {
       const txDate = parseDateString(tx.date);
@@ -363,7 +374,7 @@ export default function LaporanTransaksi({
         type: 'pos',
         customerName: tx.customerName || 'Pelanggan Umum',
         customerPhone: tx.customerPhone || '',
-        cashierName: tx.cashierName || 'Kasir',
+        cashierName: resolveCashierName(tx.cashierName),
         summaryText: itemsSummary,
         amount: tx.totalAmount || 0,
         profit: tx.totalProfit || 0,
@@ -386,7 +397,7 @@ export default function LaporanTransaksi({
         type: 'service',
         customerName: s.customerName || 'Pelanggan Jasa',
         customerPhone: s.customerPhone || '',
-        cashierName: s.cashierName || 'Teknisi',
+        cashierName: resolveCashierName(s.cashierName),
         summaryText: `Reparasi ${s.devModel || 'HP'} (${s.description || 'Jasa'})${statusNote}`,
         amount: isCompleted ? (s.cost || 0) : 0,
         profit: isCompleted ? Math.max(0, (s.cost || 0) - (s.capitalCost || 0)) : 0,
@@ -974,7 +985,7 @@ export default function LaporanTransaksi({
                               <td className="py-3 px-3 whitespace-nowrap">
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100/90 text-slate-800 font-bold text-[11px] rounded-lg border border-slate-200 shadow-2xs">
                                   <User size={11} className="text-indigo-600 shrink-0" />
-                                  <span>{item.cashierName || 'Staff Kasir'}</span>
+                                  <span>{item.cashierName || currentUserName || 'Aldi'}</span>
                                 </span>
                               </td>
                               {isAdminOrOwner && (

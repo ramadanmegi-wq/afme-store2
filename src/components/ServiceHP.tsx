@@ -47,6 +47,7 @@ export default function ServiceHP({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [inputCashierName, setInputCashierName] = useState(cashierName || 'Staff Service');
 
   const matchedCustomers = useMemo(() => {
     if (!customerName.trim()) return [];
@@ -93,6 +94,7 @@ export default function ServiceHP({
     setCost(0);
     setCapitalCost(0);
     setSparepartId('');
+    setInputCashierName(cashierName || 'Staff Service');
     setIsFormOpen(true);
   };
 
@@ -108,6 +110,7 @@ export default function ServiceHP({
     setCost(s.cost);
     setCapitalCost(s.capitalCost);
     setSparepartId(s.sparepartId || '');
+    setInputCashierName(s.cashierName || cashierName || 'Staff Service');
     setIsFormOpen(true);
   };
 
@@ -170,7 +173,7 @@ export default function ServiceHP({
       date: existingSrv?.date || new Date().toISOString(),
       sparepartId: sparepartId || undefined,
       sparepartName: selectedSp ? selectedSp.name : undefined,
-      cashierName: cashierName || existingSrv?.cashierName || 'Staff Service'
+      cashierName: inputCashierName.trim() || cashierName || existingSrv?.cashierName || 'Staff Service'
     };
 
     onSaveService(newService);
@@ -254,6 +257,18 @@ export default function ServiceHP({
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">Teknisi / Staff Penanggung Jawab</label>
+              <input
+                type="text"
+                placeholder="Nama Staff / Teknisi..."
+                value={inputCashierName}
+                onChange={(e) => setInputCashierName(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                 required
               />
             </div>

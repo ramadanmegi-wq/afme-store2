@@ -103,29 +103,28 @@ export default function TrackingKaryawan({
     };
   });
 
-  // Unique list of tracked employees ONLY (Default: Aldi & Friya + custom employees)
+  // Unique list of tracked employees ONLY (Aldi & Friya by default + any explicitly added custom staff)
   const allStaffNames = useMemo(() => {
     const defaultList = ['Aldi', 'Friya'];
-    const combined = [...defaultList, ...customStaff];
-    const unique = new Set<string>();
+    const namesSet = new Set<string>();
 
-    combined.forEach(name => {
-      const trimmed = name.trim();
-      if (trimmed && !trimmed.toLowerCase().includes('owner') && !trimmed.toLowerCase().includes('admin') && !trimmed.toLowerCase().includes('megi')) {
-        unique.add(trimmed);
-      }
+    defaultList.forEach(n => namesSet.add(n));
+    customStaff.forEach(n => {
+      const trimmed = n.trim();
+      if (trimmed) namesSet.add(trimmed);
     });
 
-    return Array.from(unique);
+    return Array.from(namesSet);
   }, [customStaff]);
 
-  // Helper to match any raw cashier/purchaser string to tracked staff
+  // Helper to match any raw cashier/purchaser string to tracked staff (Aldi or Friya)
   const findTrackedStaff = (rawName?: string): string | null => {
     if (!rawName) return null;
-    const lower = rawName.toLowerCase().replace(/\s*\([^)]*\)/g, '').trim();
-    if (!lower) return null;
+    const cleanRaw = rawName.replace(/\s*\([^)]*\)/g, '').trim();
+    if (!cleanRaw) return null;
+    const lower = cleanRaw.toLowerCase();
 
-    // Direct check against tracked names
+    // Check against tracked staff names (Aldi & Friya)
     for (const staff of allStaffNames) {
       const staffLower = staff.toLowerCase();
       if (lower === staffLower || lower.includes(staffLower) || staffLower.includes(lower)) {
@@ -133,7 +132,7 @@ export default function TrackingKaryawan({
       }
     }
 
-    return null;
+    return null; // Do not attribute to Aldi/Friya if created by non-tracked accounts (e.g. Owner/Admin)
   };
 
   // Helper date matching
@@ -242,6 +241,9 @@ export default function TrackingKaryawan({
 
     // Process products (Stock purchases)
     products.forEach(p => {
+      const pDate = (p as any).createdAt || (p as any).date;
+      if (pDate && !isDateInFilter(pDate)) return;
+
       const matchedStaff = findTrackedStaff(p.purchaserName);
       if (!matchedStaff || !stats[matchedStaff]) return;
 
@@ -376,14 +378,20 @@ export default function TrackingKaryawan({
   // Filtered stock purchase log table
   const purchaseLogsFiltered = useMemo(() => {
     return products.filter(p => {
-      if (!p.purchaserName) return false;
-      const matchStaff = selectedStaffFilter === 'all' || p.purchaserName === selectedStaffFilter;
+      const pDate = (p as any).createdAt || (p as any).date;
+      if (pDate && !isDateInFilter(pDate)) return false;
+
+      const matchedStaff = findTrackedStaff(p.purchaserName);
+      if (!matchedStaff) return false; // Strictly include only purchases assigned to tracked staff (Aldi, Friya, etc.)
+
+      const matchStaff = selectedStaffFilter === 'all' || matchedStaff === selectedStaffFilter;
       const matchSearch = (p.model || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (p.imei && p.imei.includes(searchTerm)) ||
-                          (p.purchaserName && p.purchaserName.toLowerCase().includes(searchTerm.toLowerCase()));
+                          (p.purchaserName && p.purchaserName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (matchedStaff && matchedStaff.toLowerCase().includes(searchTerm.toLowerCase()));
       return matchStaff && matchSearch;
     });
-  }, [products, selectedStaffFilter, searchTerm]);
+  }, [products, selectedStaffFilter, searchTerm, dateFilter]);
 
   // Restriction check: Only Admin & Owner can view target tracking
   if (activeRole !== 'owner' && activeRole !== 'admin') {
@@ -847,7 +855,7 @@ export default function TrackingKaryawan({
                       <td className="py-3 px-4 font-bold text-amber-800">
                         <span className="inline-flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/70">
                           <UserCheck size={12} className="text-amber-600" />
-                          <span>{p.purchaserName}</span>
+                          <span>{findTrackedStaff(p.purchaserName) || p.purchaserName || '-'}</span>
                         </span>
                       </td>
                       <td className="py-3 px-4">

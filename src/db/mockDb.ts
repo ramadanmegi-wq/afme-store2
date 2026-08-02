@@ -18,9 +18,16 @@ const INITIAL_ACCOUNTS: AppAccount[] = [
   },
   {
     id: 'acc-2',
-    username: 'karyawan',
-    name: 'Staff Kasir (Karyawan)',
-    password: 'staffpassword',
+    username: 'aldi',
+    name: 'Aldi (Karyawan)',
+    password: 'aldipassword',
+    role: 'karyawan'
+  },
+  {
+    id: 'acc-5',
+    username: 'friya',
+    name: 'Friya (Karyawan)',
+    password: 'friyapassword',
     role: 'karyawan'
   },
   {
@@ -86,7 +93,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 200000,
     sellingPrice: 4200000,
     status: 'available',
-    purchaserName: 'Admin AFME',
+    purchaserName: 'Aldi',
   },
   {
     id: 'prod-2',
@@ -97,7 +104,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 500000,
     sellingPrice: 8500000,
     status: 'available',
-    purchaserName: 'Rian (Owner)',
+    purchaserName: 'Friya',
   },
   {
     id: 'prod-3',
@@ -108,7 +115,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 0,
     sellingPrice: 10200000,
     status: 'sold',
-    purchaserName: 'Admin AFME',
+    purchaserName: 'Aldi',
   },
   {
     id: 'prod-4',
@@ -119,6 +126,7 @@ const INITIAL_PRODUCTS: Product[] = [
     repairCost: 350000,
     sellingPrice: 16500000,
     status: 'available',
+    purchaserName: 'Friya',
   },
   {
     id: 'prod-acc1',
@@ -129,6 +137,7 @@ const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 250000,
     status: 'available',
     stock: 15,
+    purchaserName: 'Aldi',
   },
   {
     id: 'prod-acc2',
@@ -139,6 +148,7 @@ const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 95000,
     status: 'available',
     stock: 24,
+    purchaserName: 'Friya',
   },
   {
     id: 'prod-acc3',
@@ -149,6 +159,7 @@ const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 50000,
     status: 'available',
     stock: 40,
+    purchaserName: 'Aldi',
   }
 ];
 
@@ -164,6 +175,7 @@ const INITIAL_SERVICES: Service[] = [
     cost: 650000,
     capitalCost: 300000,
     date: '2026-06-15T10:00:00.000Z',
+    cashierName: 'Aldi',
   },
   {
     id: 'srv-2',
@@ -176,6 +188,7 @@ const INITIAL_SERVICES: Service[] = [
     cost: 450000,
     capitalCost: 180000,
     date: '2026-06-17T11:30:00.000Z',
+    cashierName: 'Friya',
   },
   {
     id: 'srv-3',
@@ -188,6 +201,7 @@ const INITIAL_SERVICES: Service[] = [
     cost: 850000,
     capitalCost: 400000,
     date: '2026-06-18T08:15:00.000Z',
+    cashierName: 'Aldi',
   }
 ];
 
@@ -220,7 +234,7 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
     totalAmount: 10295000,
     totalProfit: 2260000, // (10200000 - 8000000) + (95000 - 35000)
     date: '2026-06-16T14:20:00.000Z',
-    cashierName: 'Ahmad (Karyawan)',
+    cashierName: 'Aldi',
   }
 ];
 
