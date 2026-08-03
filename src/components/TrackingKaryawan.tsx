@@ -247,16 +247,18 @@ export default function TrackingKaryawan({
       const matchedStaff = findTrackedStaff(p.purchaserName);
       if (!matchedStaff || !stats[matchedStaff]) return;
 
-      const cost = p.type === 'iphone' ? (p.buyPrice + (p.repairCost || 0)) : (p.buyPrice * (p.stock || 1));
+      const isIphone = p.type === 'iphone';
+      const cost = isIphone ? (p.buyPrice + (p.repairCost || 0)) : (p.buyPrice * (p.stock || 1));
+      
       stats[matchedStaff].purchaseCount += 1;
       stats[matchedStaff].purchaseTotalRp += cost;
-      if (p.type === 'iphone') {
-        stats[matchedStaff].purchaseUnitsHp += 1;
-      }
+      
+      // Include BOTH iPhone (1 unit) and accessories (N units based on stock)
+      stats[matchedStaff].purchaseUnitsHp += isIphone ? 1 : (p.stock || 1);
     });
 
     return stats;
-  }, [allStaffNames, filteredTransactions, products, services]);
+  }, [allStaffNames, filteredTransactions, products, services, dateFilter]);
 
   // Overall totals
   const overallTotals = useMemo(() => {
@@ -647,12 +649,12 @@ export default function TrackingKaryawan({
                   </div>
                 </div>
 
-                {/* Target Progress 3: Belanja Stok HP (Units) */}
+                {/* Target Progress 3: Belanja Stok (Units) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-700 flex items-center gap-1">
                       <ShoppingBag size={13} className="text-amber-600" />
-                      Target Belanja Stok HP
+                      Target Belanja Stok
                     </span>
                     <span className="font-mono font-extrabold text-amber-700">{purchasePct}%</span>
                   </div>
@@ -943,7 +945,7 @@ export default function TrackingKaryawan({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Target Belanja Stok HP (Unit)
+                  Target Belanja Stok (Unit)
                 </label>
                 <input
                   type="number"
@@ -1039,7 +1041,7 @@ export default function TrackingKaryawan({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Target Belanja Stok HP Bulanan (Unit)
+                  Target Belanja Stok Bulanan (Unit)
                 </label>
                 <input
                   type="number"

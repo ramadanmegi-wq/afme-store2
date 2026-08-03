@@ -506,6 +506,7 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
 
       return {
         id: p.id,
+        createdAt: p.created_at,
         type: 'iphone',
         model,
         imei: p.imei || '',
@@ -533,6 +534,7 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
 
       return {
         id: a.id,
+        createdAt: a.created_at,
         type: 'aksesoris',
         model,
         sku,
@@ -600,7 +602,13 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         harga_modal: prod.buyPrice + (prod.repairCost || 0),
         harga_jual: prod.sellingPrice,
         stok: prod.status === 'available' ? 1 : 0,
-        kondisi: (prod.model || '').toLowerCase().includes('baru') ? 'Baru' : 'Second'
+        kondisi: (prod.model || '').toLowerCase().includes('baru') ? 'Baru' : 'Second',
+        purchaser_name: prod.purchaserName || null
+      };
+
+      const payloadFallback2 = {
+        ...payloadFallback,
+        purchaser_name: undefined
       };
 
       try {
@@ -609,20 +617,40 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
           if (error) {
             if (error.code === '42703' || error.message?.includes('biaya_perbaikan') || error.message?.includes('column')) {
               const { error: errFallback } = await supabase.from('products').update(payloadFallback).eq('id', prod.id);
-              if (errFallback) throw errFallback;
+              if (errFallback) {
+                const { error: errFallback2 } = await supabase.from('products').update(payloadFallback2).eq('id', prod.id);
+                if (errFallback2) throw errFallback2;
+              }
             } else {
               throw error;
             }
           }
         } else {
-          const { error } = await supabase.from('products').insert([payloadWithRepairCost]);
+          let insertedData;
+          const { data, error } = await supabase.from('products').insert([payloadWithRepairCost]).select();
           if (error) {
             if (error.code === '42703' || error.message?.includes('biaya_perbaikan') || error.message?.includes('column')) {
-              const { error: errFallback } = await supabase.from('products').insert([payloadFallback]);
-              if (errFallback) throw errFallback;
+              const { data: fbData, error: errFallback } = await supabase.from('products').insert([payloadFallback]).select();
+              if (errFallback) {
+                const { data: fbData2, error: errFallback2 } = await supabase.from('products').insert([payloadFallback2]).select();
+                if (errFallback2) throw errFallback2;
+                insertedData = fbData2;
+              } else {
+                insertedData = fbData;
+              }
             } else {
               throw error;
             }
+          } else {
+            insertedData = data;
+          }
+          
+          if (insertedData && insertedData[0] && prod.purchaserName) {
+            try {
+              const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
+              localMaps[insertedData[0].id] = prod.purchaserName;
+              localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
+            } catch (e) {}
           }
         }
       } catch (dbErr) {
@@ -636,7 +664,8 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         harga_modal: prod.buyPrice,
         harga_jual: prod.sellingPrice,
         stok: prod.stock || 0,
-        sku: prod.sku || null
+        sku: prod.sku || null,
+        purchaser_name: prod.purchaserName || null
       };
 
       const payloadFallback = {
@@ -644,7 +673,13 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
         kategori: 'Aksesoris',
         harga_modal: prod.buyPrice,
         harga_jual: prod.sellingPrice,
-        stok: prod.stock || 0
+        stok: prod.stock || 0,
+        purchaser_name: prod.purchaserName || null
+      };
+
+      const payloadFallback2 = {
+        ...payloadFallback,
+        purchaser_name: undefined
       };
 
       try {
@@ -653,20 +688,40 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
           if (error) {
             if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
               const { error: errFallback } = await supabase.from('accessories').update(payloadFallback).eq('id', prod.id);
-              if (errFallback) throw errFallback;
+              if (errFallback) {
+                const { error: errFallback2 } = await supabase.from('accessories').update(payloadFallback2).eq('id', prod.id);
+                if (errFallback2) throw errFallback2;
+              }
             } else {
               throw error;
             }
           }
         } else {
-          const { error } = await supabase.from('accessories').insert([payloadWithSku]);
+          let insertedData;
+          const { data, error } = await supabase.from('accessories').insert([payloadWithSku]).select();
           if (error) {
             if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
-              const { error: errFallback } = await supabase.from('accessories').insert([payloadFallback]);
-              if (errFallback) throw errFallback;
+              const { data: fbData, error: errFallback } = await supabase.from('accessories').insert([payloadFallback]).select();
+              if (errFallback) {
+                const { data: fbData2, error: errFallback2 } = await supabase.from('accessories').insert([payloadFallback2]).select();
+                if (errFallback2) throw errFallback2;
+                insertedData = fbData2;
+              } else {
+                insertedData = fbData;
+              }
             } else {
               throw error;
             }
+          } else {
+            insertedData = data;
+          }
+          
+          if (insertedData && insertedData[0] && prod.purchaserName) {
+            try {
+              const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
+              localMaps[insertedData[0].id] = prod.purchaserName;
+              localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
+            } catch (e) {}
           }
         }
       } catch (dbErr) {
@@ -1090,7 +1145,8 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
         biaya_perbaikan: trx.tradeIn.repairCost || 0,
         harga_jual: Math.round(trx.tradeIn.buyPrice * 1.25), // Prediksi harga jual default
         stok: 1,
-        kondisi: 'Second'
+        kondisi: 'Second',
+        purchaser_name: trx.cashierName
       };
 
       const tradeInFallback = {
@@ -1103,7 +1159,8 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
         harga_modal: trx.tradeIn.buyPrice + (trx.tradeIn.repairCost || 0),
         harga_jual: Math.round(trx.tradeIn.buyPrice * 1.25),
         stok: 1,
-        kondisi: 'Second'
+        kondisi: 'Second',
+        purchaser_name: trx.cashierName
       };
 
       try {
@@ -1124,7 +1181,8 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
             repair_cost: trx.tradeIn.repairCost || 0,
             selling_price: Math.round(trx.tradeIn.buyPrice * 1.25),
             status: 'available',
-            stock: 1
+            stock: 1,
+            purchaser_name: trx.cashierName
           };
           const { error: engErr } = await supabase.from('products').insert([tradeInEnglishPayload]);
           if (engErr) {

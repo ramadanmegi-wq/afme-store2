@@ -86,7 +86,7 @@ const INITIAL_SPAREPARTS: Sparepart[] = [
 const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-1',
-    type: 'iphone',
+    createdAt: new Date().toISOString(), type: 'iphone',
     model: 'iPhone 11 128GB Black (Second)',
     imei: '356782109283741',
     buyPrice: 3200000,
@@ -94,72 +94,82 @@ const INITIAL_PRODUCTS: Product[] = [
     sellingPrice: 4200000,
     status: 'available',
     purchaserName: 'Aldi',
+
   },
   {
     id: 'prod-2',
-    type: 'iphone',
+    createdAt: new Date().toISOString(), type: 'iphone',
     model: 'iPhone 12 Pro 256GB Pacific Blue (Second)',
     imei: '351283019283123',
     buyPrice: 6500000,
     repairCost: 500000,
     sellingPrice: 8500000,
     status: 'available',
-    purchaserName: 'Friya',
+    purchaserName: 'Aldi',
+
   },
   {
     id: 'prod-3',
-    type: 'iphone',
+    createdAt: new Date().toISOString(), type: 'iphone',
     model: 'iPhone 13 128GB Pink (Second)',
     imei: '359283019213842',
     buyPrice: 8000000,
     repairCost: 0,
     sellingPrice: 10200000,
     status: 'sold',
-    purchaserName: 'Aldi',
+    purchaserName: 'Friya',
+
   },
   {
     id: 'prod-4',
-    type: 'iphone',
+    createdAt: new Date().toISOString(), type: 'iphone',
     model: 'iPhone 14 Pro Max 256GB Deep Purple (Second)',
     imei: '358210394829105',
     buyPrice: 13500000,
     repairCost: 350000,
     sellingPrice: 16500000,
     status: 'available',
-    purchaserName: 'Friya',
+    purchaserName: 'Aldi',
+
   },
   {
     id: 'prod-acc1',
-    type: 'aksesoris',
+    createdAt: new Date().toISOString(), type: 'aksesoris',
     model: 'Charger Original Apple 20W USB-C',
     buyPrice: 120000,
     repairCost: 0,
     sellingPrice: 250000,
     status: 'available',
-    stock: 15,
     purchaserName: 'Aldi',
+
+    stock: 15,
+
   },
   {
     id: 'prod-acc2',
-    type: 'aksesoris',
+    createdAt: new Date().toISOString(), type: 'aksesoris',
     model: 'Silicone Case iPhone 13 (Premium)',
     buyPrice: 35000,
     repairCost: 0,
     sellingPrice: 95000,
     status: 'available',
+    purchaserName: 'Aldi',
+
     stock: 24,
-    purchaserName: 'Friya',
+
   },
   {
     id: 'prod-acc3',
-    type: 'aksesoris',
+    createdAt: new Date().toISOString(), type: 'aksesoris',
     model: 'Tempered Glass Premium KingKong',
     buyPrice: 15000,
     repairCost: 0,
     sellingPrice: 50000,
     status: 'available',
-    stock: 40,
     purchaserName: 'Aldi',
+
+    stock: 40,
+
   }
 ];
 
@@ -623,13 +633,15 @@ export function saveTransaction(trx: Transaction): void {
   if (trx.tradeIn) {
     products.push({
       id: `prod-tradein-${Date.now()}`,
-      type: 'iphone',
+      createdAt: new Date().toISOString(), type: 'iphone',
       model: `${trx.tradeIn.model} (Trade-In)`,
       imei: trx.tradeIn.imei,
       buyPrice: trx.tradeIn.buyPrice,
       repairCost: trx.tradeIn.repairCost,
       sellingPrice: Math.round(trx.tradeIn.buyPrice * 1.25), // Prediksi harga jual default
       status: 'available',
+    purchaserName: 'Aldi',
+
     });
   }
 

@@ -27,7 +27,8 @@ export interface Product {
   sellingPrice: number; // Harga jual
   status: 'available' | 'sold';
   stock?: number; // Khusus aksesoris (jumlah stok)
-  purchaserName?: string; // Nama penanggung jawab / pembeli stok barang
+  purchaserName?: string;
+  createdAt?: string; // Nama penanggung jawab / pembeli stok barang
 }
 
 export interface TradeInItem {
