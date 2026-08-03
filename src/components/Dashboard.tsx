@@ -477,13 +477,9 @@ export default function Dashboard({
             <p className="text-lg md:text-xl font-extrabold text-slate-900 mt-1">
               {availableIphones.length} <span className="text-xs font-normal text-slate-500">Unit</span>
             </p>
-            {(activeRole === 'admin' || activeRole === 'owner') ? (
+            {(activeRole === 'admin' || activeRole === 'owner') && (
               <div className="text-[10px] text-indigo-700 font-extrabold font-mono mt-1">
                 Modal Aset: {formatIDR(totalModalHpReadyVal)}
-              </div>
-            ) : (
-              <div className="text-[10px] text-rose-600 font-extrabold font-mono mt-1 flex items-center gap-1">
-                <ShieldAlert size={10} /> Modal Aset: Disensor
               </div>
             )}
           </div>

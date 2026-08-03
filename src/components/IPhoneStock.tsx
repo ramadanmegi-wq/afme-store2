@@ -189,10 +189,8 @@ export default function IPhoneStock({
 
           <div className="bg-white p-4.5 rounded-2xl border border-indigo-100/90 bg-gradient-to-br from-indigo-50/30 to-white shadow-xs space-y-1">
             <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block font-sans">TOTAL MODAL HP READY (ASET)</span>
-            {(activeRole === 'owner' || activeRole === 'admin') ? (
+            {(activeRole === 'owner' || activeRole === 'admin') && (
               <p className="text-xl font-extrabold font-mono text-indigo-950">{formatIDR(totalModalHpReady)}</p>
-            ) : (
-              <p className="text-sm font-extrabold text-rose-600 flex items-center gap-1 mt-1 mb-1"><ShieldAlert size={14}/> Disensor</p>
             )}
             <p className="text-[10px] text-indigo-600/80 pt-1 border-t border-indigo-100/60 font-medium">Modal Beli Pokok + Biaya Servis Unit</p>
           </div>
@@ -205,10 +203,8 @@ export default function IPhoneStock({
 
           <div className="bg-white p-4.5 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-xs space-y-1">
             <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block font-sans">PROYEKSI LABA KOTOR</span>
-            {(activeRole === 'owner' || activeRole === 'admin') ? (
+            {(activeRole === 'owner' || activeRole === 'admin') && (
               <p className="text-xl font-extrabold font-mono text-emerald-600">{formatIDR(projectedProfitHpReady)}</p>
-            ) : (
-              <p className="text-sm font-extrabold text-rose-600 flex items-center gap-1 mt-1 mb-1"><ShieldAlert size={14}/> Disensor</p>
             )}
             <p className="text-[10px] text-emerald-700/80 pt-1 border-t border-emerald-100 font-medium">Potensi keuntungan kotor HP Ready</p>
           </div>
@@ -223,10 +219,8 @@ export default function IPhoneStock({
 
           <div className="bg-white p-4.5 rounded-2xl border border-violet-100 bg-violet-50/20 shadow-xs space-y-1">
             <span className="text-[10px] font-extrabold text-violet-700 uppercase tracking-wider block font-sans">TOTAL MODAL AKSESORIS</span>
-            {(activeRole === 'owner' || activeRole === 'admin') ? (
+            {(activeRole === 'owner' || activeRole === 'admin') && (
               <p className="text-xl font-extrabold font-mono text-slate-900">{formatIDR(totalModalAccReady)}</p>
-            ) : (
-              <p className="text-sm font-extrabold text-rose-600 flex items-center gap-1 mt-1 mb-1"><ShieldAlert size={14}/> Disensor</p>
             )}
             <p className="text-[10px] text-violet-700/80 pt-1 border-t border-violet-100 font-medium">Aset modal stok aksesoris</p>
           </div>
@@ -239,10 +233,8 @@ export default function IPhoneStock({
 
           <div className="bg-white p-4.5 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-xs space-y-1">
             <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block font-sans">PROYEKSI LABA KOTOR</span>
-            {(activeRole === 'owner' || activeRole === 'admin') ? (
+            {(activeRole === 'owner' || activeRole === 'admin') && (
               <p className="text-xl font-extrabold font-mono text-emerald-600">{formatIDR(projectedProfitAccReady)}</p>
-            ) : (
-              <p className="text-sm font-extrabold text-rose-600 flex items-center gap-1 mt-1 mb-1"><ShieldAlert size={14}/> Disensor</p>
             )}
             <p className="text-[10px] text-emerald-700/80 pt-1 border-t border-emerald-100 font-medium">Potensi margin aksesoris</p>
           </div>
