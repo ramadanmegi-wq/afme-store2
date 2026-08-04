@@ -9,10 +9,24 @@ const cleanEnvVar = (val: string): string => {
   return cleaned;
 };
 
-const rawUrl = cleanEnvVar((import.meta as any).env?.VITE_SUPABASE_URL || '');
+const getStoredUrl = (): string => {
+  try {
+    return localStorage.getItem('VITE_SUPABASE_URL') || '';
+  } catch (e) {
+    return '';
+  }
+};
+
+const getStoredKey = (): string => {
+  try {
+    return localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '';
+  } catch (e) {
+    return '';
+  }
+};
 
 const sanitizeUrl = (url: string) => {
-  let cleaned = url.trim();
+  let cleaned = (url || '').trim();
   if (cleaned.endsWith('/')) {
     cleaned = cleaned.slice(0, -1);
   }
@@ -25,8 +39,11 @@ const sanitizeUrl = (url: string) => {
   return cleaned;
 };
 
+const rawUrl = cleanEnvVar((import.meta as any).env?.VITE_SUPABASE_URL || getStoredUrl());
+const rawKey = cleanEnvVar((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || getStoredKey());
+
 const supabaseUrl = sanitizeUrl(rawUrl);
-const supabaseAnonKey = cleanEnvVar((import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '');
+const supabaseAnonKey = rawKey;
 
 // Kita pastikan inisialisasi tidak menyebabkan kegagalan fatal pada aplikasi jika variabel belum didefinisikan
 export const isSupabaseConfigured = Boolean(

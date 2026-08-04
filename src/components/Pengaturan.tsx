@@ -1,3 +1,4 @@
+import { generateUUID } from "../lib/uuid";
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -165,7 +166,7 @@ export default function Pengaturan({
     }
 
     const accountData: AppAccount = {
-      id: isEditing ? userId : `acc-${Date.now()}`,
+      id: isEditing ? userId : generateUUID(),
       username: username.trim().toLowerCase(),
       name: name.trim(),
       password: password.trim(),

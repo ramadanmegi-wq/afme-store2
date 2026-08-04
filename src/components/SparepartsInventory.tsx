@@ -1,3 +1,4 @@
+import { generateUUID } from "../lib/uuid";
 import { useState, FormEvent } from 'react';
 import { 
   Plus, 
@@ -86,7 +87,7 @@ export default function SparepartsInventory({
     if (!name.trim() || !compatibleModels.trim()) return;
 
     const newSp: Sparepart = {
-      id: editingId || `sp-${Date.now()}`,
+      id: editingId || generateUUID(),
       name: name.trim(),
       stock: Number(stock),
       buyPrice: Number(buyPrice),

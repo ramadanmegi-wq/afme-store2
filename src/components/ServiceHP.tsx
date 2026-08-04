@@ -1,3 +1,4 @@
+import { generateUUID } from "../lib/uuid";
 import { useState, FormEvent, useMemo } from 'react';
 import { 
   Plus, 
@@ -161,7 +162,7 @@ export default function ServiceHP({
     const existingSrv = editingId ? services.find(s => s.id === editingId) : null;
 
     const newService: Service = {
-      id: editingId || `srv-${Date.now()}`,
+      id: editingId || generateUUID(),
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
       devModel: devModel.trim(),

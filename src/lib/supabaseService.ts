@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Product, Transaction, Service, Customer, OperationalExpense, Sparepart, AppAccount } from '../types';
-import { getServices, saveService, getTransactions, saveTransaction, updateTransaction } from '../db/mockDb';
+import { getProducts, getSpareparts, getExpenses, getServices, saveService, getTransactions, saveTransaction, updateTransaction } from '../db/mockDb';
 
 // SQL Skema penuh yang dapat disalin pengguna ke SQL Editor Supabase
 export const SUPABASE_FULL_SQL_SCHEMA = `-- SKEMA DATABASE UTAMA AFM STORE (SUPABASE)
@@ -550,7 +550,7 @@ export async function getProductsFromSupabase(): Promise<Product[]> {
     return [...hpList, ...accList];
   } catch (e) {
     console.error('Gagal mengambil products dari Supabase:', e);
-    return [];
+    return getProducts();
   }
 }
 
@@ -578,6 +578,7 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
       const warna = warnaMatch ? warnaMatch[0] : '';
 
       const payloadWithRepairCost = {
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id) ? { id: prod.id } : {} ),
         nama_produk: prod.model,
         imei: prod.imei || null,
         kategori: 'iPhone',
@@ -593,6 +594,7 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
       };
 
       const payloadFallback = {
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id) ? { id: prod.id } : {} ),
         nama_produk: prod.model,
         imei: prod.imei || null,
         kategori: 'iPhone',
@@ -607,58 +609,59 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
       };
 
       const payloadFallback2 = {
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id) ? { id: prod.id } : {} ),
         ...payloadFallback,
         purchaser_name: undefined
       };
 
-      try {
-        if (isIdUuid) {
-          const { error } = await supabase.from('products').update(payloadWithRepairCost).eq('id', prod.id);
-          if (error) {
-            if (error.code === '42703' || error.message?.includes('biaya_perbaikan') || error.message?.includes('column')) {
-              const { error: errFallback } = await supabase.from('products').update(payloadFallback).eq('id', prod.id);
-              if (errFallback) {
-                const { error: errFallback2 } = await supabase.from('products').update(payloadFallback2).eq('id', prod.id);
-                if (errFallback2) throw errFallback2;
-              }
-            } else {
-              throw error;
-            }
-          }
-        } else {
-          let insertedData;
-          const { data, error } = await supabase.from('products').insert([payloadWithRepairCost]).select();
-          if (error) {
-            if (error.code === '42703' || error.message?.includes('biaya_perbaikan') || error.message?.includes('column')) {
-              const { data: fbData, error: errFallback } = await supabase.from('products').insert([payloadFallback]).select();
-              if (errFallback) {
-                const { data: fbData2, error: errFallback2 } = await supabase.from('products').insert([payloadFallback2]).select();
-                if (errFallback2) throw errFallback2;
-                insertedData = fbData2;
-              } else {
-                insertedData = fbData;
-              }
-            } else {
-              throw error;
-            }
+      let error = null;
+      if (isIdUuid) {
+        const { error: err } = await supabase.from('products').upsert([payloadWithRepairCost], { onConflict: 'id' });
+        error = err;
+      } else {
+        const { error: err } = await supabase.from('products').insert([payloadWithRepairCost]);
+        error = err;
+      }
+      
+      if (error) {
+        if (error.code === '42703' || error.message?.includes('biaya_perbaikan') || error.message?.includes('column')) {
+          let errFallback = null;
+          if (isIdUuid) {
+            const { error: err } = await supabase.from('products').upsert([payloadFallback], { onConflict: 'id' });
+            errFallback = err;
           } else {
-            insertedData = data;
+            const { error: err } = await supabase.from('products').insert([payloadFallback]);
+            errFallback = err;
           }
           
-          if (insertedData && insertedData[0] && prod.purchaserName) {
-            try {
-              const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
-              localMaps[insertedData[0].id] = prod.purchaserName;
-              localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
-            } catch (e) {}
+          if (errFallback) {
+            delete payloadFallback2.purchaser_name;
+            let errFallback2 = null;
+            if (isIdUuid) {
+              const { error: err } = await supabase.from('products').upsert([payloadFallback2], { onConflict: 'id' });
+              errFallback2 = err;
+            } else {
+              const { error: err } = await supabase.from('products').insert([payloadFallback2]);
+              errFallback2 = err;
+            }
+            if (errFallback2) throw errFallback2;
           }
+        } else {
+          throw error;
         }
-      } catch (dbErr) {
-        console.error('Penyimpanan detail HP gagal, mencoba menyimpan tanpa biaya_perbaikan terpisah:', dbErr);
+      }
+      
+      if (prod.purchaserName) {
+        try {
+          const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
+          localMaps[prod.id] = prod.purchaserName;
+          localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
+        } catch (e) {}
       }
     } else {
       // Accessories
       const payloadWithSku = {
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id) ? { id: prod.id } : {} ),
         nama_barang: prod.model,
         kategori: 'Aksesoris',
         harga_modal: prod.buyPrice,
@@ -669,6 +672,7 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
       };
 
       const payloadFallback = {
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id) ? { id: prod.id } : {} ),
         nama_barang: prod.model,
         kategori: 'Aksesoris',
         harga_modal: prod.buyPrice,
@@ -678,58 +682,59 @@ export async function saveProductToSupabase(prod: Product): Promise<void> {
       };
 
       const payloadFallback2 = {
+        ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod.id) ? { id: prod.id } : {} ),
         ...payloadFallback,
         purchaser_name: undefined
       };
 
-      try {
-        if (isIdUuid) {
-          const { error } = await supabase.from('accessories').update(payloadWithSku).eq('id', prod.id);
-          if (error) {
-            if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
-              const { error: errFallback } = await supabase.from('accessories').update(payloadFallback).eq('id', prod.id);
-              if (errFallback) {
-                const { error: errFallback2 } = await supabase.from('accessories').update(payloadFallback2).eq('id', prod.id);
-                if (errFallback2) throw errFallback2;
-              }
-            } else {
-              throw error;
-            }
-          }
-        } else {
-          let insertedData;
-          const { data, error } = await supabase.from('accessories').insert([payloadWithSku]).select();
-          if (error) {
-            if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
-              const { data: fbData, error: errFallback } = await supabase.from('accessories').insert([payloadFallback]).select();
-              if (errFallback) {
-                const { data: fbData2, error: errFallback2 } = await supabase.from('accessories').insert([payloadFallback2]).select();
-                if (errFallback2) throw errFallback2;
-                insertedData = fbData2;
-              } else {
-                insertedData = fbData;
-              }
-            } else {
-              throw error;
-            }
+      let error = null;
+      if (isIdUuid) {
+        const { error: err } = await supabase.from('accessories').upsert([payloadWithSku], { onConflict: 'id' });
+        error = err;
+      } else {
+        const { error: err } = await supabase.from('accessories').insert([payloadWithSku]);
+        error = err;
+      }
+
+      if (error) {
+        if (error.code === '42703' || error.message?.includes('sku') || error.message?.includes('column')) {
+          let errFallback = null;
+          if (isIdUuid) {
+            const { error: err } = await supabase.from('accessories').upsert([payloadFallback], { onConflict: 'id' });
+            errFallback = err;
           } else {
-            insertedData = data;
+            const { error: err } = await supabase.from('accessories').insert([payloadFallback]);
+            errFallback = err;
           }
           
-          if (insertedData && insertedData[0] && prod.purchaserName) {
-            try {
-              const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
-              localMaps[insertedData[0].id] = prod.purchaserName;
-              localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
-            } catch (e) {}
+          if (errFallback) {
+            delete payloadFallback2.purchaser_name;
+            let errFallback2 = null;
+            if (isIdUuid) {
+              const { error: err } = await supabase.from('accessories').upsert([payloadFallback2], { onConflict: 'id' });
+              errFallback2 = err;
+            } else {
+              const { error: err } = await supabase.from('accessories').insert([payloadFallback2]);
+              errFallback2 = err;
+            }
+            if (errFallback2) throw errFallback2;
           }
+        } else {
+          throw error;
         }
-      } catch (dbErr) {
-        console.error('Penyimpanan aksesoris ke Supabase gagal, mencoba tanpa SKU:', dbErr);
+      }
+
+      if (prod.purchaserName) {
+        try {
+          const localMaps = JSON.parse(localStorage.getItem('prod_purchaser_maps') || '{}');
+          localMaps[prod.id] = prod.purchaserName;
+          localStorage.setItem('prod_purchaser_maps', JSON.stringify(localMaps));
+        } catch (e) {}
       }
     }
   } catch (e) {
     console.error('Gagal menyimpan product ke Supabase:', e);
+    throw e;
   }
 }
 
@@ -737,9 +742,7 @@ export async function deleteProductFromSupabase(id: string, type: string): Promi
   if (!isSupabaseConfigured) return;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (!isUuid) {
-      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
-    }
+    if (!isUuid) return;
     if (type === 'iphone') {
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw error;
@@ -764,7 +767,7 @@ export async function getSparepartsFromSupabase(): Promise<Sparepart[]> {
 
     if (error) throw error;
 
-    return (data || []).map(s => {
+    const cloudSpareparts = (data || []).map(s => {
       // Ekstrak compatible model secara cerdik atau simpan di nama
       const match = s.nama_sparepart.match(/\b(iPhone [X\d]+(?: Pro| Pro Max| Mini| Max| Plus| XR| XS| SE)*)\b/i);
       const compatible = match ? match[0] : 'Umum / iPhone Semua Tipe';
@@ -778,9 +781,11 @@ export async function getSparepartsFromSupabase(): Promise<Sparepart[]> {
         compatibleModels: compatible
       };
     });
+
+    return cloudSpareparts;
   } catch (e) {
     console.error('Gagal mengambil spareparts dari Supabase:', e);
-    return [];
+    return getSpareparts();
   }
 }
 
@@ -796,17 +801,20 @@ export async function saveSparepartToSupabase(sp: Sparepart): Promise<string | u
       stok: sp.stock
     };
 
-    if (isUuid) {
-      await supabase.from('spareparts').update(payload).eq('id', sp.id);
-      return sp.id;
+    const isIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sp.id);
+    let error = null;
+    if (isIdUuid) {
+      const { error: err } = await supabase.from('spareparts').upsert([{ id: sp.id, ...payload }], { onConflict: 'id' });
+      error = err;
     } else {
-      const { data, error } = await supabase.from('spareparts').insert([payload]).select('id').maybeSingle();
-      if (error) throw error;
-      return data?.id;
+      const { error: err } = await supabase.from('spareparts').insert([payload]);
+      error = err;
     }
+    if (error) throw error;
+    return sp.id;
   } catch (e) {
     console.error('Gagal menyimpan sparepart ke Supabase:', e);
-    return undefined;
+    throw e;
   }
 }
 
@@ -814,9 +822,7 @@ export async function deleteSparepartFromSupabase(id: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (!isUuid) {
-      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
-    }
+    if (!isUuid) return;
     const { error } = await supabase.from('spareparts').delete().eq('id', id);
     if (error) throw error;
   } catch (e) {
@@ -836,7 +842,7 @@ export async function getServicesFromSupabase(): Promise<Service[]> {
 
     if (error) throw error;
 
-    return (data || []).map(s => ({
+    const cloudServices = (data || []).map(s => ({
       id: s.id,
       customerName: s.customer_name,
       customerPhone: s.customer_phone,
@@ -850,6 +856,8 @@ export async function getServicesFromSupabase(): Promise<Service[]> {
       sparepartId: s.sparepart_id || undefined,
       sparepartName: s.sparepart_name || undefined
     }));
+
+    return cloudServices;
   } catch (e) {
     console.error('Gagal mengambil services dari Supabase:', e);
     return getServices();
@@ -896,13 +904,18 @@ export async function saveServiceToSupabase(srv: Service): Promise<void> {
       sparepart_name: srv.sparepartName || null
     };
 
+    let error = null;
     if (isUuid) {
-      await supabase.from('services').update(payload).eq('id', srv.id);
+      const { error: err } = await supabase.from('services').upsert([{ id: srv.id, ...payload }], { onConflict: 'id' });
+      error = err;
     } else {
-      await supabase.from('services').insert([payload]);
+      const { error: err } = await supabase.from('services').insert([payload]);
+      error = err;
     }
+    if (error) throw error;
   } catch (e) {
     console.error('Gagal menyimpan service ke Supabase:', e);
+    throw e;
   }
 }
 
@@ -910,9 +923,7 @@ export async function deleteServiceFromSupabase(id: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (!isUuid) {
-      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
-    }
+    if (!isUuid) return;
     const { error } = await supabase.from('services').delete().eq('id', id);
     if (error) throw error;
   } catch (e) {
@@ -1029,6 +1040,7 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
 
     // 1. Insert ke table 'transactions' dengan try-fallback
     const payload: any = {
+      ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trx.id) ? { id: trx.id } : {} ),
       nomor_transaksi: orderNo,
       tanggal: trx.date || new Date().toISOString(),
       total_modal: totalModal,
@@ -1040,15 +1052,21 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
       cashier_name: trx.cashierName || 'Staff Kasir'
     };
 
-    let { data: saleData, error: saleErr } = await supabase
-      .from('transactions')
-      .insert([payload])
-      .select()
-      .single();
+    const isIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trx.id);
+    let saleData, saleErr;
+    
+    if (isIdUuid) {
+      const { data, error } = await supabase.from('transactions').upsert([payload], { onConflict: 'id' }).select().single();
+      saleData = data; saleErr = error;
+    } else {
+      const { data, error } = await supabase.from('transactions').insert([payload]).select().single();
+      saleData = data; saleErr = error;
+    }
 
     if (saleErr && (saleErr.code === '42703' || saleErr.message?.includes('column'))) {
       // Fallback: retry without custom columns
       const fallbackPayload = {
+        ...( isIdUuid ? { id: trx.id } : {} ),
         nomor_transaksi: orderNo,
         tanggal: trx.date || new Date().toISOString(),
         total_modal: totalModal,
@@ -1056,13 +1074,14 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
         laba: laba,
         metode_pembayaran: 'Tunai'
       };
-      const retryResult = await supabase
-        .from('transactions')
-        .insert([fallbackPayload])
-        .select()
-        .single();
-      saleData = retryResult.data;
-      saleErr = retryResult.error;
+      
+      if (isIdUuid) {
+        const { data, error } = await supabase.from('transactions').upsert([fallbackPayload], { onConflict: 'id' }).select().single();
+        saleData = data; saleErr = error;
+      } else {
+        const { data, error } = await supabase.from('transactions').insert([fallbackPayload]).select().single();
+        saleData = data; saleErr = error;
+      }
     }
 
     if (saleErr) throw saleErr;
@@ -1209,6 +1228,7 @@ export async function updateTransactionInSupabase(updatedTrx: Transaction): Prom
 
     // 1. Update ke tabel 'transactions' dengan try-fallback
     const payload: any = {
+      ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updatedTrx.id) ? { id: updatedTrx.id } : {} ),
       total_modal: totalModal,
       total_penjualan: totalJual,
       laba: laba,
@@ -1291,16 +1311,18 @@ export async function getExpensesFromSupabase(): Promise<OperationalExpense[]> {
 
     if (error) throw error;
 
-    return (data || []).map(e => ({
+    const cloudExpenses = (data || []).map(e => ({
       id: e.id,
       name: e.deskripsi,
       amount: Number(e.nominal),
       date: e.tanggal,
       category: e.kategori as any
     }));
+
+    return cloudExpenses;
   } catch (e) {
     console.error('Gagal mengambil expenses dari Supabase:', e);
-    return [];
+    return getExpenses();
   }
 }
 
@@ -1309,19 +1331,24 @@ export async function saveExpenseToSupabase(exp: OperationalExpense): Promise<vo
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(exp.id);
     const payload = {
-      kategori: exp.category,
       deskripsi: exp.name,
+      kategori: exp.category,
       nominal: exp.amount,
       tanggal: exp.date
     };
 
+    let error = null;
     if (isUuid) {
-      await supabase.from('expenses').update(payload).eq('id', exp.id);
+      const { error: err } = await supabase.from('expenses').upsert([{ id: exp.id, ...payload }], { onConflict: 'id' });
+      error = err;
     } else {
-      await supabase.from('expenses').insert([payload]);
+      const { error: err } = await supabase.from('expenses').insert([payload]);
+      error = err;
     }
+    if (error) throw error;
   } catch (e) {
     console.error('Gagal menyimpan expense ke Supabase:', e);
+    throw e;
   }
 }
 
@@ -1329,9 +1356,7 @@ export async function deleteExpenseFromSupabase(id: string): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    if (!isUuid) {
-      throw new Error(`ID "${id}" bukan format UUID cloud. Otomatis menghapus cache lokal.`);
-    }
+    if (!isUuid) return;
     const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (error) throw error;
   } catch (e) {

@@ -1,3 +1,4 @@
+import { generateUUID } from "../lib/uuid";
 import { useState, FormEvent } from 'react';
 import { 
   Plus, 
@@ -114,7 +115,7 @@ export default function IPhoneStock({
     if (!model.trim()) return;
 
     const newProduct: Product = {
-      id: editingId || `prod-${Date.now()}`,
+      id: editingId || generateUUID(),
       createdAt: new Date().toISOString(),
       type,
       model: model.trim(),

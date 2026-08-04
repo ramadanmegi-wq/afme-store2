@@ -1,3 +1,4 @@
+import { generateUUID } from "../lib/uuid";
 import React, { useState, useMemo } from 'react';
 import { 
   Users, 
@@ -75,7 +76,7 @@ export default function CustomerRoster({
 
     if (onSaveCustomer) {
       onSaveCustomer({
-        id: modalMode === 'edit' && editingCustomer ? editingCustomer.id : `cust-${Date.now()}`,
+        id: modalMode === 'edit' && editingCustomer ? editingCustomer.id : generateUUID(),
         name: formName.trim(),
         phone: formPhone.trim()
       });

@@ -1,3 +1,4 @@
+import { generateUUID } from "./lib/uuid";
 import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
@@ -241,18 +242,17 @@ export default function App() {
   // Save changes to stock items (iPhone or accessories)
   const handleSaveProduct = async (prod: Product) => {
     setIsLoading(true);
+    saveProduct(prod);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => saveProductToSupabase(prod),
         () => {
-          saveProduct(prod);
-          triggerToast('Gagal sinkron cloud, perubahan disimpan ke penyimpanan lokal sementara', 'info');
+          triggerToast('Gagal sinkron cloud, perubahan disimpan ke penyimpanan lokal', 'info');
         },
         'Berhasil mengunggah perubahan produk ke database Supabase',
         'Gagal menyimpan produk ke Cloud'
       );
     } else {
-      saveProduct(prod);
       triggerToast('Penyimpanan lokal sukses (Offline Cache)');
     }
     await refreshDbState();
@@ -264,18 +264,17 @@ export default function App() {
     if (!prod) return;
     
     setIsLoading(true);
+    deleteProduct(id);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => deleteProductFromSupabase(id, prod.type),
         () => {
-          deleteProduct(id);
           triggerToast('Gagal sinkron cloud, produk dihapus dari penyimpanan lokal', 'info');
         },
         'Produk terhapus dari Supabase Cloud',
         'Gagal menghapus produk dari Cloud'
       );
     } else {
-      deleteProduct(id);
       triggerToast('Produk terhapus (Offline Cache)', 'info');
     }
     await refreshDbState();
@@ -284,18 +283,17 @@ export default function App() {
   // Save changes to services Repair logs
   const handleSaveService = async (srv: Service) => {
     setIsLoading(true);
+    saveService(srv);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => saveServiceToSupabase(srv),
         () => {
-          saveService(srv);
           triggerToast('Gagal sinkron cloud, hasil servis disimpan secara lokal', 'info');
         },
         'Berhasil menyimpan nota reparasi di Supabase Cloud',
         'Gagal menyimpan nota servis ke Cloud'
       );
     } else {
-      saveService(srv);
       triggerToast('Selesai merekam nota servis (Offline Cache)');
     }
 
@@ -307,7 +305,7 @@ export default function App() {
       const lowerName = cleanName.toLowerCase();
       if (lowerName !== 'pelanggan umum' && lowerName !== 'customer umum' && lowerName !== 'umum') {
         saveCustomer({
-          id: `cust-${Date.now()}`,
+          id: generateUUID(),
           name: cleanName,
           phone: cleanPhone,
         });
@@ -320,18 +318,17 @@ export default function App() {
   // Delete service log
   const handleDeleteService = async (id: string) => {
     setIsLoading(true);
+    deleteService(id);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => deleteServiceFromSupabase(id),
         () => {
-          deleteService(id);
           triggerToast('Gagal sinkron cloud, log servis dihapus secara lokal', 'info');
         },
         'Model service terhapus dari cloud',
         'Gagal menghapus nota servis dari Cloud'
       );
     } else {
-      deleteService(id);
       triggerToast('Service log terhapus (Lokal)', 'info');
     }
     await refreshDbState();
@@ -340,11 +337,11 @@ export default function App() {
   // Save changes to Spareparts
   const handleSaveSparepart = async (sp: Sparepart) => {
     setIsLoading(true);
+    saveSparepart(sp);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => saveSparepartToSupabase(sp),
         () => {
-          saveSparepart(sp);
           triggerToast('Gagal sinkron cloud, sparepart disimpan secara lokal', 'info');
           return undefined;
         },
@@ -352,7 +349,6 @@ export default function App() {
         'Gagal menyimpan sparepart ke Cloud'
       );
     } else {
-      saveSparepart(sp);
       triggerToast('Sparepart telah diperbarui secara lokal');
     }
     await refreshDbState();
@@ -361,18 +357,17 @@ export default function App() {
   // Delete sparepart item
   const handleDeleteSparepart = async (id: string) => {
     setIsLoading(true);
+    deleteSparepart(id);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => deleteSparepartFromSupabase(id),
         () => {
-          deleteSparepart(id);
           triggerToast('Gagal sinkron cloud, sparepart dihapus secara lokal', 'info');
         },
         'Katalog sparepart terhapus dari cloud',
         'Gagal menghapus sparepart dari Cloud'
       );
     } else {
-      deleteSparepart(id);
       triggerToast('Sparepart terhapus (Lokal)', 'info');
     }
     await refreshDbState();
@@ -381,18 +376,17 @@ export default function App() {
   // Process POS checkout transaction
   const handleCheckoutTransaction = async (trx: Transaction) => {
     setIsLoading(true);
+    saveTransaction(trx);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => saveTransactionToSupabase(trx),
         () => {
-          saveTransaction(trx);
           triggerToast('Gagal sinkron cloud, transaksi dicatat ke penyimpanan lokal', 'info');
         },
         'Transaksi POS Kasir diproses permanen di Supabase',
         'Gagal memproses transaksi ke Cloud'
       );
     } else {
-      saveTransaction(trx);
       triggerToast('Transaksi tercatat (Offline Local Storage)');
     }
 
@@ -404,7 +398,7 @@ export default function App() {
       const lowerName = cleanName.toLowerCase();
       if (lowerName !== 'pelanggan umum' && lowerName !== 'customer umum' && lowerName !== 'umum') {
         saveCustomer({
-          id: `cust-${Date.now()}`,
+          id: generateUUID(),
           name: cleanName,
           phone: cleanPhone,
         });
@@ -417,18 +411,17 @@ export default function App() {
   // Update/Edit existing transaction
   const handleUpdateTransaction = async (updatedTrx: Transaction) => {
     setIsLoading(true);
+    updateTransaction(updatedTrx);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => updateTransactionInSupabase(updatedTrx),
         () => {
-          updateTransaction(updatedTrx);
           triggerToast('Gagal sinkron cloud, transaksi diperbarui secara lokal', 'info');
         },
         'Transaksi berhasil diperbarui di cloud Supabase',
         'Gagal memperbarui transaksi di Cloud'
       );
     } else {
-      updateTransaction(updatedTrx);
       triggerToast('Transaksi berhasil diperbarui (Offline)', 'success');
     }
     await refreshDbState();
@@ -469,20 +462,19 @@ export default function App() {
     setIsLoading(true);
     const newExp: OperationalExpense = {
       ...exp,
-      id: `exp-${Date.now()}`
+      id: generateUUID()
     };
+    saveExpense(newExp);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => saveExpenseToSupabase(newExp),
         () => {
-          saveExpense(newExp);
           triggerToast('Gagal sinkron cloud, pengeluaran dicatat secara lokal', 'info');
         },
         'Pengeluaran berhasil dicatat di cloud',
         'Gagal mencatat pengeluaran di Cloud'
       );
     } else {
-      saveExpense(newExp);
       triggerToast('Biaya operasional tersimpan (Offline)');
     }
     await refreshDbState();
@@ -491,18 +483,17 @@ export default function App() {
   // Delete operational expense
   const handleDeleteExpense = async (id: string) => {
     setIsLoading(true);
+    deleteExpense(id);
     if (isSupabaseConfigured) {
       await safeRequest(
         () => deleteExpenseFromSupabase(id),
         () => {
-          deleteExpense(id);
           triggerToast('Gagal sinkron cloud, pengeluaran dihapus secara lokal', 'info');
         },
         'Jurnal biaya dibatalkan dari Supabase',
         'Gagal menghapus pengeluaran dari Cloud'
       );
     } else {
-      deleteExpense(id);
       triggerToast('Jurnal biaya terhapus (Lokal)', 'info');
     }
     await refreshDbState();

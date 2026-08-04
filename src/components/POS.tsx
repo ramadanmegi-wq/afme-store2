@@ -1,3 +1,4 @@
+import { generateUUID } from "../lib/uuid";
 import { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
@@ -424,7 +425,7 @@ Pusat iPhone Bekas & Jasa Servis Berkualitas`;
         : undefined;
 
       const newTrx: Transaction = {
-        id: `trx-${Date.now()}`,
+        id: generateUUID(),
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         items: cart,
