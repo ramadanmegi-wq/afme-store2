@@ -1219,16 +1219,27 @@ export async function saveTransactionToSupabase(trx: Transaction): Promise<void>
   }
 }
 
+
+
 export async function updateTransactionInSupabase(updatedTrx: Transaction): Promise<void> {
   if (!isSupabaseConfigured) return;
   try {
+    const isIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updatedTrx.id);
+    
+    // If not a UUID, we can't update it in Supabase directly by ID.
+    // It might be a locally created legacy transaction.
+    if (!isIdUuid) {
+      console.warn("Skipping update in Supabase because ID is not UUID:", updatedTrx.id);
+      return;
+    }
+
     const totalModal = updatedTrx.items.reduce((sum, item) => sum + ((item.buyPrice + (item.repairCost || 0)) * item.quantity), 0);
     const totalJual = updatedTrx.totalAmount;
     const laba = updatedTrx.totalProfit > 0 ? updatedTrx.totalProfit : (totalJual - totalModal);
 
     // 1. Update ke tabel 'transactions' dengan try-fallback
     const payload: any = {
-      ...( /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updatedTrx.id) ? { id: updatedTrx.id } : {} ),
+      id: updatedTrx.id,
       total_modal: totalModal,
       total_penjualan: totalJual,
       laba: laba,
@@ -1243,7 +1254,6 @@ export async function updateTransactionInSupabase(updatedTrx: Transaction): Prom
       .eq('id', updatedTrx.id);
 
     if (sErr && (sErr.code === '42703' || sErr.message?.includes('column'))) {
-      // Fallback: update without customer_name/customer_phone columns
       const fallbackPayload = {
         total_modal: totalModal,
         total_penjualan: totalJual,
@@ -1259,7 +1269,6 @@ export async function updateTransactionInSupabase(updatedTrx: Transaction): Prom
 
     if (sErr) throw sErr;
 
-    // Save mapping locally for robust fallback tracking
     try {
       const localMaps = JSON.parse(localStorage.getItem('trx_customer_maps') || '{}');
       localMaps[updatedTrx.id] = {
@@ -1272,16 +1281,15 @@ export async function updateTransactionInSupabase(updatedTrx: Transaction): Prom
       console.error('Error updating local transaction map:', e);
     }
 
-    // 2. Refresh detail items.
-    // Menghapus item transaksi lama
     const { error: delErr } = await supabase
       .from('transaction_items')
       .delete()
       .eq('transaction_id', updatedTrx.id);
 
-    if (delErr) throw delErr;
+    if (delErr) {
+      throw delErr;
+    }
 
-    // Masukkan item transaksi baru yang diedit
     const itemsPayload = updatedTrx.items.map(item => ({
       transaction_id: updatedTrx.id,
       product_id: item.productId,
@@ -1290,15 +1298,20 @@ export async function updateTransactionInSupabase(updatedTrx: Transaction): Prom
       harga: item.sellingPrice,
       subtotal: item.sellingPrice * item.quantity
     }));
-
-    const { error: itemsErr } = await supabase.from('transaction_items').insert(itemsPayload);
-    if (itemsErr) throw itemsErr;
-
+    
+    if (itemsPayload.length > 0) {
+      const { error: itemsErr } = await supabase.from('transaction_items').insert(itemsPayload);
+      if (itemsErr) {
+        throw itemsErr;
+      }
+    }
   } catch (e) {
     console.error('Gagal memperbarui transaksi di Supabase:', e);
     throw e;
   }
 }
+
+
 
 // ================= APP EXPENSES SERVICES =================
 export async function getExpensesFromSupabase(): Promise<OperationalExpense[]> {

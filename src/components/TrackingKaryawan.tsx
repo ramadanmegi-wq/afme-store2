@@ -114,8 +114,27 @@ export default function TrackingKaryawan({
       if (trimmed) namesSet.add(trimmed);
     });
 
+    // Auto-include cashiers from transactions
+    transactions.forEach(t => {
+      if (t.cashierName && t.cashierName.trim() && t.cashierName.toLowerCase() !== 'staff kasir' && t.cashierName.toLowerCase() !== 'staff afme') {
+        const cleanRaw = t.cashierName.replace(/\s*\([^)]*\)/g, '').trim();
+        const lower = cleanRaw.toLowerCase();
+        let matched = false;
+        for (const existing of Array.from(namesSet)) {
+          if (existing.toLowerCase() === lower || lower.includes(existing.toLowerCase())) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && cleanRaw) {
+          const formatted = cleanRaw.charAt(0).toUpperCase() + cleanRaw.slice(1);
+          namesSet.add(formatted);
+        }
+      }
+    });
+
     return Array.from(namesSet);
-  }, [customStaff]);
+  }, [customStaff, transactions]);
 
   // Helper to match any raw cashier/purchaser string to tracked staff (Aldi or Friya)
   const findTrackedStaff = (rawName?: string): string | null => {
@@ -210,10 +229,14 @@ export default function TrackingKaryawan({
 
       if (t.items && t.items.length > 0) {
         t.items.forEach(item => {
-          const qty = item.quantity ?? (item as any).qty ?? 1;
+          const qty = Number(item.quantity ?? (item as any).qty ?? 1);
           const matchedProd = products.find(p => p.id === item.productId);
-          const pType = item.type ?? (item as any).productType ?? (matchedProd ? matchedProd.type : undefined);
-          if (pType === 'iphone' || (pType as string) === 'hp') {
+          const pType = (matchedProd ? matchedProd.type : undefined) ?? item.type ?? (item as any).productType;
+          
+          const modelName = (item.model || '').toLowerCase();
+          const isPhoneModel = modelName.includes('iphone') || modelName.includes('samsung') || modelName.includes('oppo') || modelName.includes('vivo') || modelName.includes('xiaomi') || modelName.includes('realme') || modelName.includes('infinix') || modelName.includes('hp');
+          
+          if (pType === 'iphone' || (pType as string) === 'hp' || isPhoneModel) {
             hpUnits += qty;
           }
         });
