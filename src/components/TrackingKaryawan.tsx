@@ -64,16 +64,6 @@ export default function TrackingKaryawan({
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Custom staff list stored in localStorage
-  const [customStaff, setCustomStaff] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('afme_custom_staff');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Gagal membaca custom staff:', e);
-    }
-    return [];
-  });
-
   // Modal State for Adding New Staff
   const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState<boolean>(false);
   const [newStaffName, setNewStaffName] = useState<string>('');
@@ -105,36 +95,8 @@ export default function TrackingKaryawan({
 
   // Unique list of tracked employees ONLY (Aldi & Friya by default + any explicitly added custom staff)
   const allStaffNames = useMemo(() => {
-    const defaultList = ['Aldi', 'Friya'];
-    const namesSet = new Set<string>();
-
-    defaultList.forEach(n => namesSet.add(n));
-    customStaff.forEach(n => {
-      const trimmed = n.trim();
-      if (trimmed) namesSet.add(trimmed);
-    });
-
-    // Auto-include cashiers from transactions
-    transactions.forEach(t => {
-      if (t.cashierName && t.cashierName.trim() && t.cashierName.toLowerCase() !== 'staff kasir' && t.cashierName.toLowerCase() !== 'staff afme') {
-        const cleanRaw = t.cashierName.replace(/\s*\([^)]*\)/g, '').trim();
-        const lower = cleanRaw.toLowerCase();
-        let matched = false;
-        for (const existing of Array.from(namesSet)) {
-          if (existing.toLowerCase() === lower || lower.includes(existing.toLowerCase())) {
-            matched = true;
-            break;
-          }
-        }
-        if (!matched && cleanRaw) {
-          const formatted = cleanRaw.charAt(0).toUpperCase() + cleanRaw.slice(1);
-          namesSet.add(formatted);
-        }
-      }
-    });
-
-    return Array.from(namesSet);
-  }, [customStaff, transactions]);
+    return ['Aldi', 'Friya'];
+  }, []);
 
   // Helper to match any raw cashier/purchaser string to tracked staff (Aldi or Friya)
   const findTrackedStaff = (rawName?: string): string | null => {
@@ -143,15 +105,15 @@ export default function TrackingKaryawan({
     if (!cleanRaw) return null;
     const lower = cleanRaw.toLowerCase();
 
-    // Check against tracked staff names (Aldi & Friya)
     for (const staff of allStaffNames) {
       const staffLower = staff.toLowerCase();
-      if (lower === staffLower || lower.includes(staffLower) || staffLower.includes(lower)) {
+      // Strict match: must contain the exact name as a whole word or exact match
+      if (lower === staffLower || lower.split(' ').includes(staffLower)) {
         return staff;
       }
     }
 
-    return null; // Do not attribute to Aldi/Friya if created by non-tracked accounts (e.g. Owner/Admin)
+    return null;
   };
 
   // Helper date matching
@@ -313,9 +275,6 @@ export default function TrackingKaryawan({
       return;
     }
 
-    const updatedCustom = [...customStaff, formattedName];
-    setCustomStaff(updatedCustom);
-    localStorage.setItem('afme_custom_staff', JSON.stringify(updatedCustom));
 
     const updatedTargets = {
       ...staffTargets,
@@ -340,9 +299,6 @@ export default function TrackingKaryawan({
       return;
     }
     if (confirm(`Yakin ingin menghapus karyawan ${staffName} dari daftar tracking?`)) {
-      const updated = customStaff.filter(s => s !== staffName);
-      setCustomStaff(updated);
-      localStorage.setItem('afme_custom_staff', JSON.stringify(updated));
     }
   };
 
@@ -539,15 +495,7 @@ export default function TrackingKaryawan({
           </div>
 
           <div className="flex items-center gap-2">
-            {(activeRole === 'owner' || activeRole === 'admin') && (
-              <button
-                onClick={() => setIsAddStaffModalOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/15 transition cursor-pointer"
-              >
-                <UserPlus size={14} />
-                <span>+ Tambah Karyawan Baru</span>
-              </button>
-            )}
+            {/* Add staff button removed as requested (only Aldi and Friya) */}
           </div>
         </div>
 
