@@ -251,15 +251,17 @@ export default function TrackingKaryawan({
     let totalProfit = 0;
     let totalBelanjaHpRp = 0;
     let totalBelanjaHpUnits = 0;
+    let totalSalesCount = 0;
 
     (Object.values(staffStatsMap) as StaffStatItem[]).forEach(st => {
       totalOmset += st.salesOmset;
       totalProfit += st.salesProfit;
       totalBelanjaHpRp += st.purchaseTotalRp;
       totalBelanjaHpUnits += st.purchaseUnitsHp;
+      totalSalesCount += st.salesCount;
     });
 
-    return { totalOmset, totalProfit, totalBelanjaHpRp, totalBelanjaHpUnits };
+    return { totalOmset, totalProfit, totalBelanjaHpRp, totalBelanjaHpUnits, totalSalesCount };
   }, [staffStatsMap]);
 
   // Handler: Add New Employee
@@ -292,15 +294,6 @@ export default function TrackingKaryawan({
     setIsAddStaffModalOpen(false);
   };
 
-  // Handler: Remove Custom Staff
-  const handleRemoveStaff = (staffName: string) => {
-    if (staffName === 'Aldi' || staffName === 'Friya') {
-      alert('Aldi dan Friya adalah karyawan utama yang tidak dapat dihapus.');
-      return;
-    }
-    if (confirm(`Yakin ingin menghapus karyawan ${staffName} dari daftar tracking?`)) {
-    }
-  };
 
   // Handler to open target edit modal
   const handleOpenTargetModal = (staffName: string) => {
@@ -348,7 +341,8 @@ export default function TrackingKaryawan({
   const salesLogsFiltered = useMemo(() => {
     return filteredTransactions.filter(t => {
       const matched = findTrackedStaff(t.cashierName);
-      const matchStaff = selectedStaffFilter === 'all' || matched === selectedStaffFilter || (t.cashierName && t.cashierName.includes(selectedStaffFilter));
+      if (!matched) return false; // Strictly include only purchases assigned to tracked staff (Aldi, Friya, etc.)
+      const matchStaff = selectedStaffFilter === 'all' || matched === selectedStaffFilter;
       const matchSearch = (t.invoiceNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (t.customerName && t.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (t.cashierName && t.cashierName.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -460,9 +454,9 @@ export default function TrackingKaryawan({
 
         <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-1">
           <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">TOTAL TRANSAKSI KASIR</span>
-          <p className="text-2xl font-black font-mono text-slate-900">{filteredTransactions.length} <span className="text-xs font-sans text-slate-500 font-normal">Nota</span></p>
+          <p className="text-2xl font-black font-mono text-slate-900">{overallTotals.totalSalesCount} <span className="text-xs font-sans text-slate-500 font-normal">Nota</span></p>
           <p className="text-[11px] text-slate-500 font-medium pt-1 border-t border-slate-100">
-            Pencapaian transaksi seluruh staf
+            Pencapaian transaksi staf terdaftar
           </p>
         </div>
 
@@ -522,7 +516,6 @@ export default function TrackingKaryawan({
             const salesProfitPct = Math.min(100, Math.round((st.salesProfit / (profitTargetVal || 1)) * 100));
             const salesUnitsPct = Math.min(100, Math.round((st.hpUnitsSold / (target.salesTargetUnits || 1)) * 100));
             const purchasePct = Math.min(100, Math.round((st.purchaseUnitsHp / (target.purchaseTargetUnits || 1)) * 100));
-            const isCustom = staffName !== 'Aldi' && staffName !== 'Friya';
 
             return (
               <div 
@@ -556,15 +549,7 @@ export default function TrackingKaryawan({
                         <Edit3 size={14} />
                       </button>
                     )}
-                    {isCustom && (activeRole === 'owner' || activeRole === 'admin') && (
-                      <button
-                        onClick={() => handleRemoveStaff(staffName)}
-                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition cursor-pointer"
-                        title="Hapus Karyawan Ini"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+
                   </div>
                 </div>
 
