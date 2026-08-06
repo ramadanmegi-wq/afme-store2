@@ -29,6 +29,7 @@ interface LaporanTransaksiProps {
   services: Service[];
   activeRole: UserRole;
   onUpdateTransaction?: (trx: Transaction) => Promise<void>;
+  onDeleteTransaction?: (id: string) => Promise<void>;
   products?: Product[];
   onSaveProduct?: (prod: Product) => Promise<void>;
   currentUserName?: string;
@@ -39,6 +40,7 @@ export default function LaporanTransaksi({
   services,
   activeRole,
   onUpdateTransaction,
+  onDeleteTransaction,
   products,
   onSaveProduct,
   currentUserName
@@ -1000,14 +1002,23 @@ export default function LaporanTransaksi({
                                )}
                                <td className="py-3 px-4 text-center whitespace-nowrap">
                                 {isAdminOrOwner && item.type === 'pos' ? (
-                                  <button
-                                    onClick={() => handleStartEdit(item.originalData)}
-                                    className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded-lg text-[10.5px] font-extrabold transition cursor-pointer border border-amber-200"
-                                    title="Edit atau Redo Transaksi Penjualan"
-                                  >
-                                    <Pencil size={11} />
-                                    <span>Edit/Redo</span>
-                                  </button>
+                                  <div className="flex justify-center gap-1">
+                                    <button
+                                      onClick={() => handleStartEdit(item.originalData)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 rounded-lg text-[10.5px] font-extrabold transition cursor-pointer border border-amber-200"
+                                      title="Edit atau Redo Transaksi Penjualan"
+                                    >
+                                      <Pencil size={11} />
+                                      <span>Edit/Redo</span>
+                                    </button>
+                                    <button
+                                      onClick={() => onDeleteTransaction && onDeleteTransaction(item.id)}
+                                      className="inline-flex items-center justify-center w-7 h-7 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition cursor-pointer border border-rose-200"
+                                      title="Hapus Transaksi Penjualan"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
                                 ) : item.type === 'pos' ? (
                                   <span className="text-[10px] text-slate-400 italic font-medium">Laporan POS</span>
                                 ) : (

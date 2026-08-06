@@ -602,6 +602,12 @@ export function getTransactions(): Transaction[] {
   return getFromStorage<Transaction[]>('transactions', INITIAL_TRANSACTIONS);
 }
 
+export function deleteTransaction(id: string): void {
+  const transactions = getTransactions();
+  const filtered = transactions.filter(t => t.id !== id);
+  saveToStorage('transactions', filtered);
+}
+
 export function updateTransaction(updatedTrx: Transaction): void {
   const transactions = getTransactions();
   const index = transactions.findIndex((t) => t.id === updatedTrx.id);

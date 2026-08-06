@@ -39,6 +39,7 @@ import {
   getTransactions, 
   saveTransaction, 
   updateTransaction,
+  deleteTransaction,
   getCustomers,
   saveCustomer,
   deleteCustomer,
@@ -69,6 +70,7 @@ import {
   getTransactionsFromSupabase,
   saveTransactionToSupabase,
   updateTransactionInSupabase,
+  deleteTransactionFromSupabase,
   clearAllSupabaseData,
   migrateLocalDataToSupabase
 } from './lib/supabaseService';
@@ -425,6 +427,29 @@ export default function App() {
       triggerToast('Transaksi berhasil diperbarui (Offline)', 'success');
     }
     await refreshDbState();
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm('Yakin ingin menghapus transaksi ini? Data stok tidak akan dikembalikan otomatis.')) return;
+    
+    setIsLoading(true);
+    deleteTransaction(id);
+    
+    if (isSupabaseConfigured) {
+      await safeRequest(
+        () => deleteTransactionFromSupabase(id),
+        () => {
+          triggerToast('Gagal sinkron cloud, transaksi dihapus secara lokal', 'info');
+        },
+        'Transaksi berhasil dihapus dari sistem dan cloud',
+        'Gagal menghapus transaksi dari Cloud'
+      );
+    } else {
+      triggerToast('Transaksi berhasil dihapus secara lokal', 'success');
+    }
+    
+    setTransactions(getTransactions());
+    setIsLoading(false);
   };
 
   // Add/Update customer
@@ -1089,6 +1114,7 @@ export default function App() {
                 services={services}
                 activeRole={activeRole}
                 onUpdateTransaction={handleUpdateTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
                 products={products}
                 onSaveProduct={handleSaveProduct}
                 currentUserName={activeStaffName}

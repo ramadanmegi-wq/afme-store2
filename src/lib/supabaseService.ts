@@ -1457,3 +1457,14 @@ export async function clearAllSupabaseData(): Promise<void> {
     console.error('Gagal mengosongkan database Supabase:', e);
   }
 }
+
+export async function deleteTransactionFromSupabase(id: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  try {
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting transaction from Supabase:', error);
+    throw error;
+  }
+}
