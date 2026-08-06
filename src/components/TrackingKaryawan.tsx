@@ -180,10 +180,13 @@ export default function TrackingKaryawan({
           const pType = (matchedProd ? matchedProd.type : undefined) ?? item.type ?? (item as any).productType;
           
           const modelName = (item.model || '').toLowerCase();
+          const isAksesoris = pType === 'aksesoris' || modelName.includes('case') || modelName.includes('casing') || modelName.includes('charger') || modelName.includes('adaptor') || modelName.includes('kabel') || modelName.includes('tempered') || modelName.includes('tg') || modelName.includes('headset') || modelName.includes('audio') || modelName.includes('airpods');
           const isPhoneModel = modelName.includes('iphone') || modelName.includes('samsung') || modelName.includes('oppo') || modelName.includes('vivo') || modelName.includes('xiaomi') || modelName.includes('realme') || modelName.includes('infinix') || modelName.includes('hp');
           
+          const isHp = (pType === 'iphone' || pType === 'hp' || (isPhoneModel && !isAksesoris)) && pType !== 'aksesoris';
+
           // Only calculate omset, profit, and units for HP units, ignoring accessories and services
-          if (pType === 'iphone' || (pType as string) === 'hp' || isPhoneModel) {
+          if (isHp) {
             hpUnits += qty;
             const selling = item.sellingPrice ?? (item as any).price ?? 0;
             const buy = item.buyPrice ?? 0;
@@ -211,10 +214,10 @@ export default function TrackingKaryawan({
       const matchedStaff = findTrackedStaff(p.purchaserName);
       if (!matchedStaff || !stats[matchedStaff]) return;
 
-      const isIphone = p.type === 'iphone';
+      const isHp = p.type === 'iphone' || p.type === 'hp' || (p.type as string) === 'hp';
       
       // ONLY include HP for purchases as well, ignoring aksesoris
-      if (isIphone) {
+      if (isHp) {
         const cost = p.buyPrice + (p.repairCost || 0);
         stats[matchedStaff].purchaseCount += 1;
         stats[matchedStaff].purchaseTotalRp += cost;
@@ -333,6 +336,9 @@ export default function TrackingKaryawan({
   // Filtered stock purchase log table
   const purchaseLogsFiltered = useMemo(() => {
     return products.filter(p => {
+      const isHp = p.type === 'iphone' || p.type === 'hp' || (p.type as string) === 'hp';
+      if (!isHp) return false; // STRICTLY ONLY HP
+
       const pDate = (p as any).createdAt || (p as any).date;
       if (pDate && !isDateInFilter(pDate)) return false;
 
