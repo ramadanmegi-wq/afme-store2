@@ -186,8 +186,8 @@ export default function TrackingKaryawan({
           
           // STRICT check: If we don't have an explicit pType, we check keywords. We also assume anything under 500k is an accessory unless specified as iphone.
           const selling = item.sellingPrice ?? (item as any).price ?? 0;
-          const buy = item.buyPrice ?? 0;
-          const repair = item.repairCost ?? 0;
+          const buy = item.buyPrice || (matchedProd ? matchedProd.buyPrice : 0);
+          const repair = item.repairCost || (matchedProd ? matchedProd.repairCost : 0);
           const isCheap = selling > 0 && selling < 500000;
           
           let isHp = false;
@@ -197,17 +197,19 @@ export default function TrackingKaryawan({
             isHp = true;
           }
 
-          // AS PER USER REQUEST: "jadi penjualan aksesorisnya tidak ikut dalam target."
-          // We completely ignore accessories for Omset, Profit, AND Units!
+          // ALWAYS calculate omset and profit for ALL items (including accessories)
+          hpOmset += (selling * qty);
+          trxProfit += (selling - (buy + repair)) * qty;
+
+          // ONLY calculate units for HP units, ignoring accessories and services
           if (isHp) {
             hpUnits += qty;
-            hpOmset += (selling * qty);
-            trxProfit += (selling - (buy + repair)) * qty;
           }
         });
       }
 
-      if (hpUnits > 0) {
+      // If the transaction has any omset, count it as a sale
+      if (hpOmset > 0 || hpUnits > 0) {
         stats[matchedStaff].salesCount += 1;
         stats[matchedStaff].salesOmset += hpOmset;
         stats[matchedStaff].salesProfit += isNaN(trxProfit) ? 0 : trxProfit;
@@ -725,9 +727,10 @@ export default function TrackingKaryawan({
                     totalProfit = t.totalProfit;
                   } else if (t.items && t.items.length > 0) {
                     t.items.forEach(i => {
+                      const matchedProd = products.find(p => p.id === i.productId);
                       const selling = i.sellingPrice ?? (i as any).price ?? 0;
-                      const buy = i.buyPrice ?? 0;
-                      const repair = i.repairCost ?? 0;
+                      const buy = i.buyPrice || (matchedProd ? matchedProd.buyPrice : 0);
+                      const repair = i.repairCost || (matchedProd ? matchedProd.repairCost : 0);
                       const qty = i.quantity ?? (i as any).qty ?? 1;
                       totalProfit += (selling - (buy + repair)) * qty;
                     });
